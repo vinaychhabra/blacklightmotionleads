@@ -55,7 +55,8 @@
 
   .content{padding:0 22px 20px;max-height:520px;overflow-y:auto;}
   .lead-card{border:1px solid var(--hairline);border-radius:8px;margin-top:12px;overflow:hidden;}
-  .lead-head{display:grid;grid-template-columns:1fr 110px 130px 100px 150px auto;gap:10px;align-items:center;padding:10px 14px;background:var(--row);cursor:pointer;}
+  .lead-head{display:grid;grid-template-columns:24px 1fr 110px 130px 100px 150px auto;gap:10px;align-items:center;padding:10px 14px;background:var(--row);cursor:pointer;}
+  .lead-checkbox{width:16px;height:16px;cursor:pointer;accent-color:var(--amber);}
   .lead-name{font-size:13.5px;font-weight:500;}
   .lead-sub{font-size:10.5px;color:var(--cream-dim);}
   .status-pill{font-size:9.5px;padding:3px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:0.4px;font-weight:600;text-align:center;}
@@ -148,6 +149,13 @@
       <button class="btn" id="exportCsvBtn">Export CSV</button>
       <select id="messageTemplateSelect" style="margin-left:auto;"></select>
     </div>
+    <div class="toolbar" id="bulkToolbar" style="border-bottom:1px solid var(--hairline);padding-top:0;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--cream-dim);cursor:pointer;">
+        <input type="checkbox" class="lead-checkbox" id="selectAllCheckbox"> Select all in view
+      </label>
+      <span id="selectedCount" style="font-size:11.5px;color:var(--cream-dim);"></span>
+      <button class="btn btn-danger" id="bulkDeleteBtn" style="margin-left:auto;display:none;">Delete selected</button>
+    </div>
     <div style="padding:0 22px;font-size:11px;color:var(--cream-dim);" id="importMsg"></div>
 
     <div class="content" id="leadsContent"></div>
@@ -182,6 +190,7 @@ let currentSource = "all";
 let currentSearch = "";
 let currentTemplateId = null;
 let openLeadId = null;
+let selectedIds = new Set();
 
 // ---------- config persistence (local, not sensitive: anon key is public-safe) ----------
 async function loadConfig(){
@@ -363,6 +372,18 @@ function renderLeads(){
 
     const counts = sendCounts(lead.id);
 
+    const checkCol = document.createElement('div');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'lead-checkbox';
+    checkbox.checked = selectedIds.has(lead.id);
+    checkbox.onclick = (e)=>{
+      e.stopPropagation();
+      if(checkbox.checked) selectedIds.add(lead.id); else selectedIds.delete(lead.id);
+      updateBulkToolbar();
+    };
+    checkCol.appendChild(checkbox);
+
     const nameCol = document.createElement('div');
     nameCol.innerHTML = `<div class="lead-name">${escapeHtml(lead.name||'(unnamed)')}</div><div class="lead-sub">${escapeHtml(lead.city||'')}${lead.source ? ' · '+escapeHtml(lead.source) : ''}</div>`;
 
@@ -398,6 +419,7 @@ function renderLeads(){
     arrowCol.style.cssText = 'text-align:right;font-size:11px;color:var(--cream-dim);';
     arrowCol.textContent = openLeadId===lead.id ? '▲' : '▼';
 
+    head.appendChild(checkCol);
     head.appendChild(nameCol);
     head.appendChild(phoneCol);
     head.appendChild(emailCol);
@@ -416,7 +438,56 @@ function renderLeads(){
     card.appendChild(detail);
     el.appendChild(card);
   });
+  updateBulkToolbar();
 }
+
+function getVisibleLeadIds(){
+  return leads.filter(l=>{
+    const tabOk = currentTab === "All" || l.status === currentTab;
+    const cityOk = currentCity === "all" || l.city === currentCity;
+    const sourceOk = currentSource === "all" || l.source === currentSource;
+    const q = currentSearch.toLowerCase();
+    const searchOk = !q || (l.name||"").toLowerCase().includes(q) || (l.phone||"").includes(q) || (l.email||"").toLowerCase().includes(q) || (l.city||"").toLowerCase().includes(q);
+    return tabOk && cityOk && sourceOk && searchOk;
+  }).map(l=>l.id);
+}
+
+function updateBulkToolbar(){
+  const countEl = document.getElementById('selectedCount');
+  const delBtn = document.getElementById('bulkDeleteBtn');
+  const n = selectedIds.size;
+  countEl.textContent = n ? `${n} selected` : '';
+  delBtn.style.display = n ? 'inline-block' : 'none';
+  const selectAll = document.getElementById('selectAllCheckbox');
+  const visibleIds = getVisibleLeadIds();
+  selectAll.checked = visibleIds.length > 0 && visibleIds.every(id=>selectedIds.has(id));
+}
+
+document.getElementById('selectAllCheckbox').addEventListener('change', (e)=>{
+  const visibleIds = getVisibleLeadIds();
+  if(e.target.checked){
+    visibleIds.forEach(id=>selectedIds.add(id));
+  } else {
+    visibleIds.forEach(id=>selectedIds.delete(id));
+  }
+  renderLeads();
+});
+
+document.getElementById('bulkDeleteBtn').addEventListener('click', async ()=>{
+  const n = selectedIds.size;
+  if(!n) return;
+  const ok = await showModal('Delete leads', `Delete ${n} selected lead(s) permanently? This can't be undone.`, [
+    {label:'Cancel', value:false},
+    {label:`Delete ${n}`, value:true, style:'btn-danger'}
+  ]);
+  if(!ok) return;
+  const idList = Array.from(selectedIds).join(',');
+  await sbFetch(`leads?id=in.(${idList})`, {method:'DELETE'});
+  leads = leads.filter(l=>!selectedIds.has(l.id));
+  selectedIds.clear();
+  openLeadId = null;
+  renderTabs(); renderLeads();
+});
 
 function buildDetail(lead){
   const wrap = document.createElement('div');
