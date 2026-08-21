@@ -55,7 +55,7 @@
 
   .content{padding:0 22px 20px;max-height:520px;overflow-y:auto;}
   .lead-card{border:1px solid var(--hairline);border-radius:8px;margin-top:12px;overflow:hidden;}
-  .lead-head{display:grid;grid-template-columns:1fr 110px 130px 110px auto;gap:10px;align-items:center;padding:10px 14px;background:var(--row);cursor:pointer;}
+  .lead-head{display:grid;grid-template-columns:1fr 110px 130px 100px 150px auto;gap:10px;align-items:center;padding:10px 14px;background:var(--row);cursor:pointer;}
   .lead-name{font-size:13.5px;font-weight:500;}
   .lead-sub{font-size:10.5px;color:var(--cream-dim);}
   .status-pill{font-size:9.5px;padding:3px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:0.4px;font-weight:600;text-align:center;}
@@ -86,6 +86,16 @@
   .tpl-card input[type=text]{width:100%;font-weight:600;margin-bottom:8px;}
   .tpl-card textarea{width:100%;}
   .footer-note{padding:10px 22px 16px;font-size:10.5px;color:var(--cream-dim);border-top:1px solid var(--hairline);}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(6,6,10,.72);display:none;align-items:center;justify-content:center;z-index:999;}
+  .modal-overlay.show{display:flex;}
+  .modal-box{background:var(--panel);border:1px solid var(--hairline);border-radius:12px;padding:22px;max-width:360px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+  .modal-title{font-family:'Sora',sans-serif;font-size:16px;font-weight:700;color:var(--cream);margin-bottom:8px;}
+  .modal-msg{font-size:13px;color:var(--cream-dim);line-height:1.5;margin-bottom:18px;}
+  .modal-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;}
+
+  .quick-actions{display:flex;gap:6px;}
+  .send-count{font-family:'JetBrains Mono',monospace;font-size:10px;opacity:0.85;}
   ::-webkit-scrollbar{width:8px;}
   ::-webkit-scrollbar-thumb{background:var(--hairline);border-radius:4px;}
 </style>
@@ -131,7 +141,7 @@
     <div class="toolbar" id="leadsToolbar">
       <select id="cityFilter"><option value="all">All cities</option></select>
       <select id="sourceFilter"><option value="all">All sources</option></select>
-      <input type="text" id="searchInput" placeholder="Search by name">
+      <input type="text" id="searchInput" placeholder="Search name, phone, email, or city">
       <button class="btn btn-amber" id="addLeadBtn">+ Add lead</button>
       <button class="btn" id="importCsvBtn">Import CSV</button>
       <input type="file" id="csvFileInput" accept=".csv" style="display:none;">
@@ -147,10 +157,18 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box">
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-msg" id="modalMsg"></div>
+    <div class="modal-actions" id="modalActions"></div>
+  </div>
+</div>
+
 <script>
 const STATUSES = ["New","Contacted","Follow-up","No Response","Interested","Client Denied","Converted"];
 const STATUS_CLASS = {"New":"New","Contacted":"Contacted","Follow-up":"FollowUp","No Response":"NoResponse","Interested":"Interested","Client Denied":"ClientDenied","Converted":"Converted"};
-const TABS = ["All","New","Follow-up","No Response","Interested","Converted","Client Denied"];
+const TABS = ["All","New","Contacted","Follow-up","No Response","Interested","Converted","Client Denied"];
 
 let SUPABASE_URL = "https://bmhsjutyqplvwlkuarbr.supabase.co";
 let SUPABASE_ANON_KEY = "sb_publishable_5SkqsKU8jNnwKF22Wf1W5A_rA7Ufckm";
@@ -324,7 +342,8 @@ function renderLeads(){
     const tabOk = currentTab === "All" || l.status === currentTab;
     const cityOk = currentCity === "all" || l.city === currentCity;
     const sourceOk = currentSource === "all" || l.source === currentSource;
-    const searchOk = (l.name||"").toLowerCase().includes(currentSearch.toLowerCase());
+    const q = currentSearch.toLowerCase();
+    const searchOk = !q || (l.name||"").toLowerCase().includes(q) || (l.phone||"").includes(q) || (l.email||"").toLowerCase().includes(q) || (l.city||"").toLowerCase().includes(q);
     return tabOk && cityOk && sourceOk && searchOk;
   });
 
@@ -341,16 +360,50 @@ function renderLeads(){
 
     const head = document.createElement('div');
     head.className = 'lead-head';
-    head.innerHTML = `
-      <div>
-        <div class="lead-name">${escapeHtml(lead.name||'(unnamed)')}</div>
-        <div class="lead-sub">${escapeHtml(lead.city||'')}${lead.source ? ' · '+escapeHtml(lead.source) : ''}</div>
-      </div>
-      <div class="lead-sub">${escapeHtml(lead.phone||'—')}</div>
-      <div class="lead-sub">${escapeHtml(lead.email||'—')}</div>
-      <div><span class="status-pill status-${STATUS_CLASS[lead.status]||'New'}">${lead.status}</span></div>
-      <div style="text-align:right;font-size:11px;color:var(--cream-dim);">${openLeadId===lead.id ? '▲' : '▼'}</div>
-    `;
+
+    const counts = sendCounts(lead.id);
+
+    const nameCol = document.createElement('div');
+    nameCol.innerHTML = `<div class="lead-name">${escapeHtml(lead.name||'(unnamed)')}</div><div class="lead-sub">${escapeHtml(lead.city||'')}${lead.source ? ' · '+escapeHtml(lead.source) : ''}</div>`;
+
+    const phoneCol = document.createElement('div');
+    phoneCol.className = 'lead-sub';
+    phoneCol.textContent = lead.phone || '—';
+
+    const emailCol = document.createElement('div');
+    emailCol.className = 'lead-sub';
+    emailCol.textContent = lead.email || '—';
+
+    const statusCol = document.createElement('div');
+    statusCol.innerHTML = `<span class="status-pill status-${STATUS_CLASS[lead.status]||'New'}">${lead.status}</span>`;
+
+    const quickActions = document.createElement('div');
+    quickActions.className = 'quick-actions';
+    quickActions.onclick = (e)=> e.stopPropagation();
+
+    const waBtn = document.createElement('button');
+    waBtn.className = 'send-btn send-wa';
+    waBtn.innerHTML = 'WA' + (counts.wa ? ` <span class="send-count">(${counts.wa})</span>` : '');
+    if(!lead.phone){ waBtn.disabled = true; } else { waBtn.onclick = ()=> sendWhatsAppTo(lead); }
+
+    const emailBtn = document.createElement('button');
+    emailBtn.className = 'send-btn send-email';
+    emailBtn.innerHTML = 'Mail' + (counts.email ? ` <span class="send-count">(${counts.email})</span>` : '');
+    if(!lead.email){ emailBtn.disabled = true; } else { emailBtn.onclick = ()=> sendEmailTo(lead); }
+
+    quickActions.appendChild(waBtn);
+    quickActions.appendChild(emailBtn);
+
+    const arrowCol = document.createElement('div');
+    arrowCol.style.cssText = 'text-align:right;font-size:11px;color:var(--cream-dim);';
+    arrowCol.textContent = openLeadId===lead.id ? '▲' : '▼';
+
+    head.appendChild(nameCol);
+    head.appendChild(phoneCol);
+    head.appendChild(emailCol);
+    head.appendChild(statusCol);
+    head.appendChild(quickActions);
+    head.appendChild(arrowCol);
     head.onclick = ()=>{ openLeadId = openLeadId===lead.id ? null : lead.id; renderLeads(); };
 
     const detail = document.createElement('div');
@@ -418,7 +471,11 @@ function buildDetail(lead){
   delBtn.textContent = 'Delete lead';
   delBtn.style.marginTop = '8px';
   delBtn.onclick = async ()=>{
-    if(!confirm('Delete this lead permanently?')) return;
+    const ok = await showModal('Delete lead', `Delete "${lead.name || 'this lead'}" permanently? This can't be undone.`, [
+      {label:'Cancel', value:false},
+      {label:'Delete', value:true, style:'btn-danger'}
+    ]);
+    if(!ok) return;
     await sbFetch(`leads?id=eq.${lead.id}`, {method:'DELETE'});
     leads = leads.filter(l=>l.id!==lead.id);
     openLeadId = null;
@@ -427,33 +484,17 @@ function buildDetail(lead){
   wrap.appendChild(delBtn);
 
   // send actions
+  const dCounts = sendCounts(lead.id);
   const actions = document.createElement('div');
   actions.className = 'actions-row';
   const waBtn = document.createElement('button');
   waBtn.className = 'send-btn send-wa';
-  waBtn.textContent = 'Send WhatsApp';
-  if(!lead.phone){ waBtn.disabled = true; } else {
-    waBtn.onclick = ()=>{
-      const tpl = templates.find(t=>t.id===currentTemplateId) || templates[0];
-      const msg = (tpl ? tpl.body : "").replace(/{name}/g, lead.name);
-      window.open(`https://wa.me/${digitsOnly(lead.phone)}?text=${encodeURIComponent(msg)}`, '_blank');
-      logActivity(lead.id, 'whatsapp_sent', tpl ? tpl.label : '');
-      if(lead.status === 'New') { saveLeadField(lead.id, {status:'Contacted'}); }
-    };
-  }
+  waBtn.innerHTML = 'Send WhatsApp' + (dCounts.wa ? ` <span class="send-count">(${dCounts.wa})</span>` : '');
+  if(!lead.phone){ waBtn.disabled = true; } else { waBtn.onclick = ()=> sendWhatsAppTo(lead); }
   const emailBtn = document.createElement('button');
   emailBtn.className = 'send-btn send-email';
-  emailBtn.textContent = 'Send Email';
-  if(!lead.email){ emailBtn.disabled = true; } else {
-    emailBtn.onclick = ()=>{
-      const tpl = templates.find(t=>t.id===currentTemplateId) || templates[0];
-      const msg = (tpl ? tpl.body : "").replace(/{name}/g, lead.name);
-      const subj = (tpl && tpl.subject ? tpl.subject : "Hi from Blacklight Motion").replace(/{name}/g, lead.name);
-      window.open(`mailto:${lead.email}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(msg)}`, '_self');
-      logActivity(lead.id, 'email_sent', tpl ? tpl.label : '');
-      if(lead.status === 'New') { saveLeadField(lead.id, {status:'Contacted'}); }
-    };
-  }
+  emailBtn.innerHTML = 'Send Email' + (dCounts.email ? ` <span class="send-count">(${dCounts.email})</span>` : '');
+  if(!lead.email){ emailBtn.disabled = true; } else { emailBtn.onclick = ()=> sendEmailTo(lead); }
   actions.appendChild(waBtn);
   actions.appendChild(emailBtn);
   wrap.appendChild(actions);
@@ -502,6 +543,54 @@ function digitsOnly(phone){
 }
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- custom modal (no browser popups) ----------
+function showModal(title, message, buttons){
+  return new Promise(resolve=>{
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalMsg').textContent = message;
+    const actions = document.getElementById('modalActions');
+    actions.innerHTML = '';
+    buttons.forEach(b=>{
+      const btn = document.createElement('button');
+      btn.className = 'btn ' + (b.style || '');
+      btn.textContent = b.label;
+      btn.onclick = ()=>{ hideModal(); resolve(b.value); };
+      actions.appendChild(btn);
+    });
+    document.getElementById('modalOverlay').classList.add('show');
+  });
+}
+function hideModal(){ document.getElementById('modalOverlay').classList.remove('show'); }
+
+// ---------- send counts + shared send actions ----------
+function sendCounts(leadId){
+  const entries = activityByLead[leadId] || [];
+  return {
+    wa: entries.filter(e=>e.action==='whatsapp_sent').length,
+    email: entries.filter(e=>e.action==='email_sent').length
+  };
+}
+function currentTemplateObj(){
+  return templates.find(t=>t.id===currentTemplateId) || templates[0];
+}
+async function sendWhatsAppTo(lead){
+  const tpl = currentTemplateObj();
+  const msg = (tpl ? tpl.body : "").replace(/{name}/g, lead.name);
+  window.open(`https://wa.me/${digitsOnly(lead.phone)}?text=${encodeURIComponent(msg)}`, '_blank');
+  await logActivity(lead.id, 'whatsapp_sent', tpl ? tpl.label : '');
+  if(lead.status === 'New'){ await saveLeadField(lead.id, {status:'Contacted'}); }
+  renderTabs(); renderLeads();
+}
+async function sendEmailTo(lead){
+  const tpl = currentTemplateObj();
+  const msg = (tpl ? tpl.body : "").replace(/{name}/g, lead.name);
+  const subj = (tpl && tpl.subject ? tpl.subject : "Hi from Blacklight Motion").replace(/{name}/g, lead.name);
+  window.open(`mailto:${lead.email}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(msg)}`, '_self');
+  await logActivity(lead.id, 'email_sent', tpl ? tpl.label : '');
+  if(lead.status === 'New'){ await saveLeadField(lead.id, {status:'Contacted'}); }
+  renderTabs(); renderLeads();
 }
 
 // ---------- add lead ----------
