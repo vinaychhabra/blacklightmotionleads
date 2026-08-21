@@ -97,6 +97,23 @@
 
   .quick-actions{display:flex;gap:6px;}
   .send-count{font-family:'JetBrains Mono',monospace;font-size:10px;opacity:0.85;}
+  .pagination-bar{display:flex;align-items:center;gap:14px;padding:12px 22px;border-top:1px solid var(--hairline);}
+  .page-info{font-size:11.5px;color:var(--cream-dim);font-family:'JetBrains Mono',monospace;}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px;}
+  .stat-card{background:var(--panel);border:1px solid var(--hairline);border-radius:10px;padding:14px;}
+  .stat-num{font-family:'Sora',sans-serif;font-size:26px;font-weight:700;color:var(--cream);}
+  .stat-num.accent{background:linear-gradient(90deg,var(--amber),var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .stat-label{font-size:10.5px;color:var(--cream-dim);text-transform:uppercase;letter-spacing:.5px;margin-top:4px;}
+  .dash-section{margin-bottom:22px;}
+  .dash-section h3{font-family:'Sora',sans-serif;font-size:13px;color:var(--cream);margin:0 0 12px;}
+  .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12px;}
+  .bar-row .bar-label{width:130px;color:var(--cream-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .bar-track{flex:1;height:8px;background:var(--row);border-radius:4px;overflow:hidden;}
+  .bar-fill-stat{height:100%;background:linear-gradient(90deg,var(--amber),var(--cyan));border-radius:4px;}
+  .bar-row .bar-count{width:34px;text-align:right;font-family:'JetBrains Mono',monospace;color:var(--cream-dim);}
+  .activity-feed-item{font-size:11.5px;color:var(--cream-dim);padding:7px 0;border-bottom:1px dashed var(--hairline);font-family:'JetBrains Mono',monospace;}
+  .activity-feed-item b{color:var(--cream);font-family:'Inter',sans-serif;font-weight:600;}
   ::-webkit-scrollbar{width:8px;}
   ::-webkit-scrollbar-thumb{background:var(--hairline);border-radius:4px;}
 </style>
@@ -151,7 +168,7 @@
     </div>
     <div class="toolbar" id="bulkToolbar" style="border-bottom:1px solid var(--hairline);padding-top:0;">
       <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--cream-dim);cursor:pointer;">
-        <input type="checkbox" class="lead-checkbox" id="selectAllCheckbox"> Select all in view
+        <input type="checkbox" class="lead-checkbox" id="selectAllCheckbox"> Select all matching filters (all pages)
       </label>
       <span id="selectedCount" style="font-size:11.5px;color:var(--cream-dim);"></span>
       <button class="btn btn-danger" id="bulkDeleteBtn" style="margin-left:auto;display:none;">Delete selected</button>
@@ -159,7 +176,9 @@
     <div style="padding:0 22px;font-size:11px;color:var(--cream-dim);" id="importMsg"></div>
 
     <div class="content" id="leadsContent"></div>
+    <div class="pagination-bar" id="paginationBar" style="display:none;"></div>
     <div class="content" id="templatesContent" style="display:none;"></div>
+    <div class="content" id="dashboardContent" style="display:none;"></div>
 
     <div class="footer-note">All data lives in your Supabase project. Import dedupes by phone number — existing leads are never overwritten by re-imports.</div>
   </div>
@@ -191,6 +210,8 @@ let currentSearch = "";
 let currentTemplateId = null;
 let openLeadId = null;
 let selectedIds = new Set();
+let currentPage = 1;
+const PAGE_SIZE = 20;
 
 // ---------- config persistence (local, not sensitive: anon key is public-safe) ----------
 async function loadConfig(){
@@ -303,7 +324,7 @@ function renderTabs(){
     const btn = document.createElement('button');
     btn.className = 'tab-btn' + (t===currentTab ? ' active' : '');
     btn.innerHTML = t + ' <span class="tab-count">' + count + '</span>';
-    btn.onclick = ()=>{ currentTab = t; renderTabs(); renderLeads(); };
+    btn.onclick = ()=>{ currentTab = t; currentPage = 1; renderTabs(); renderLeads(); };
     tabsEl.appendChild(btn);
   });
   const tplBtn = document.createElement('button');
@@ -311,19 +332,42 @@ function renderTabs(){
   tplBtn.textContent = 'Templates';
   tplBtn.onclick = ()=>{
     currentTab = '__templates__';
-    document.getElementById('leadsToolbar').style.display = 'none';
-    document.getElementById('leadsContent').style.display = 'none';
-    document.getElementById('templatesContent').style.display = 'block';
+    showView('templates');
     renderTabs();
     renderTemplatesTab();
   };
   tabsEl.appendChild(tplBtn);
+
+  const dashBtn = document.createElement('button');
+  dashBtn.className = 'tab-btn' + (currentTab==='__dashboard__' ? ' active' : '');
+  dashBtn.textContent = 'Dashboard';
+  dashBtn.onclick = ()=>{
+    currentTab = '__dashboard__';
+    showView('dashboard');
+    renderTabs();
+    renderDashboardTab();
+  };
+  tabsEl.appendChild(dashBtn);
+}
+
+function showView(view){
+  const leadsToolbar = document.getElementById('leadsToolbar');
+  const bulkToolbar = document.getElementById('bulkToolbar');
+  const leadsContent = document.getElementById('leadsContent');
+  const paginationBar = document.getElementById('paginationBar');
+  const templatesContent = document.getElementById('templatesContent');
+  const dashboardContent = document.getElementById('dashboardContent');
+
+  leadsToolbar.style.display = view === 'leads' ? 'flex' : 'none';
+  bulkToolbar.style.display = view === 'leads' ? 'flex' : 'none';
+  leadsContent.style.display = view === 'leads' ? 'block' : 'none';
+  paginationBar.style.display = view === 'leads' ? 'flex' : 'none';
+  templatesContent.style.display = view === 'templates' ? 'block' : 'none';
+  dashboardContent.style.display = view === 'dashboard' ? 'block' : 'none';
 }
 
 function showLeadsView(){
-  document.getElementById('leadsToolbar').style.display = 'flex';
-  document.getElementById('leadsContent').style.display = 'block';
-  document.getElementById('templatesContent').style.display = 'none';
+  showView('leads');
 }
 
 // ---------- filters setup ----------
@@ -337,13 +381,13 @@ function populateFilterOptions(){
   cityFilter.value = currentCity;
   sourceFilter.value = currentSource;
 }
-document.getElementById('cityFilter').addEventListener('change', e=>{ currentCity=e.target.value; renderLeads(); });
-document.getElementById('sourceFilter').addEventListener('change', e=>{ currentSource=e.target.value; renderLeads(); });
-document.getElementById('searchInput').addEventListener('input', e=>{ currentSearch=e.target.value; renderLeads(); });
+document.getElementById('cityFilter').addEventListener('change', e=>{ currentCity=e.target.value; currentPage=1; renderLeads(); });
+document.getElementById('sourceFilter').addEventListener('change', e=>{ currentSource=e.target.value; currentPage=1; renderLeads(); });
+document.getElementById('searchInput').addEventListener('input', e=>{ currentSearch=e.target.value; currentPage=1; renderLeads(); });
 
 // ---------- render leads ----------
 function renderLeads(){
-  if(currentTab === '__templates__'){ return; }
+  if(currentTab === '__templates__' || currentTab === '__dashboard__'){ return; }
   showLeadsView();
   populateFilterOptions();
 
@@ -358,12 +402,20 @@ function renderLeads(){
 
   const el = document.getElementById('leadsContent');
   el.innerHTML = "";
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  if(currentPage > totalPages) currentPage = totalPages;
+  const startIdx = (currentPage - 1) * PAGE_SIZE;
+  const pageItems = filtered.slice(startIdx, startIdx + PAGE_SIZE);
+
   if(!filtered.length){
     el.innerHTML = '<div class="empty-note">No leads match this view.</div>';
+    renderPaginationBar(0, 0);
+    updateBulkToolbar();
     return;
   }
 
-  filtered.forEach(lead=>{
+  pageItems.forEach(lead=>{
     const card = document.createElement('div');
     card.className = 'lead-card';
 
@@ -438,7 +490,41 @@ function renderLeads(){
     card.appendChild(detail);
     el.appendChild(card);
   });
+  renderPaginationBar(filtered.length, totalPages);
   updateBulkToolbar();
+}
+
+function renderPaginationBar(totalItems, totalPages){
+  const bar = document.getElementById('paginationBar');
+  if(!totalItems){ bar.innerHTML = ''; return; }
+  const startIdx = (currentPage - 1) * PAGE_SIZE + 1;
+  const endIdx = Math.min(currentPage * PAGE_SIZE, totalItems);
+  bar.innerHTML = '';
+
+  const info = document.createElement('span');
+  info.className = 'page-info';
+  info.textContent = `${startIdx}–${endIdx} of ${totalItems}`;
+
+  const prevBtn = document.createElement('button');
+  prevBtn.className = 'btn';
+  prevBtn.textContent = '‹ Prev';
+  prevBtn.disabled = currentPage <= 1;
+  prevBtn.onclick = ()=>{ currentPage--; renderLeads(); };
+
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'btn';
+  nextBtn.textContent = 'Next ›';
+  nextBtn.disabled = currentPage >= totalPages;
+  nextBtn.onclick = ()=>{ currentPage++; renderLeads(); };
+
+  const pageLabel = document.createElement('span');
+  pageLabel.className = 'page-info';
+  pageLabel.textContent = `Page ${currentPage} of ${totalPages}`;
+
+  bar.appendChild(info);
+  bar.appendChild(prevBtn);
+  bar.appendChild(pageLabel);
+  bar.appendChild(nextBtn);
 }
 
 function getVisibleLeadIds(){
@@ -762,6 +848,114 @@ function renderTemplateOptions(){
   sel.innerHTML = templates.map(t=>`<option value="${t.id}">${escapeHtml(t.label)}</option>`).join('');
   sel.value = currentTemplateId;
   sel.onchange = ()=> currentTemplateId = sel.value;
+}
+
+// ---------- dashboard ----------
+function renderDashboardTab(){
+  const el = document.getElementById('dashboardContent');
+  el.innerHTML = "";
+
+  const totalLeads = leads.length;
+  const contactedCount = leads.filter(l=>l.status !== 'New').length;
+  const convertedCount = leads.filter(l=>l.status === 'Converted').length;
+  const deniedCount = leads.filter(l=>l.status === 'Client Denied').length;
+
+  let allActivity = [];
+  Object.keys(activityByLead).forEach(leadId=>{
+    activityByLead[leadId].forEach(a=> allActivity.push(Object.assign({}, a, {lead_id: leadId})));
+  });
+  const waSentTotal = allActivity.filter(a=>a.action==='whatsapp_sent').length;
+  const emailSentTotal = allActivity.filter(a=>a.action==='email_sent').length;
+
+  const conversionRate = totalLeads ? ((convertedCount/totalLeads)*100).toFixed(1) : '0.0';
+  const responseRate = totalLeads ? ((contactedCount/totalLeads)*100).toFixed(1) : '0.0';
+
+  // top-level stat cards
+  const statGrid = document.createElement('div');
+  statGrid.className = 'stat-grid';
+  const stats = [
+    {num: totalLeads, label:'Total Leads', accent:true},
+    {num: contactedCount, label:'Contacted'},
+    {num: convertedCount, label:'Converted'},
+    {num: deniedCount, label:'Client Denied'},
+    {num: waSentTotal, label:'WhatsApp Sent'},
+    {num: emailSentTotal, label:'Emails Sent'},
+    {num: responseRate+'%', label:'Contact Rate'},
+    {num: conversionRate+'%', label:'Conversion Rate'}
+  ];
+  stats.forEach(s=>{
+    const card = document.createElement('div');
+    card.className = 'stat-card';
+    card.innerHTML = `<div class="stat-num${s.accent?' accent':''}">${s.num}</div><div class="stat-label">${s.label}</div>`;
+    statGrid.appendChild(card);
+  });
+  el.appendChild(statGrid);
+
+  // status breakdown
+  el.appendChild(buildBreakdownSection('Leads by Status', STATUSES.map(s=>({label:s, count: leads.filter(l=>l.status===s).length})), totalLeads));
+
+  // city breakdown (top 8)
+  const cityCounts = {};
+  leads.forEach(l=>{ if(l.city){ cityCounts[l.city] = (cityCounts[l.city]||0)+1; } });
+  const cityRows = Object.entries(cityCounts).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([label,count])=>({label,count}));
+  el.appendChild(buildBreakdownSection('Leads by City', cityRows, totalLeads));
+
+  // source breakdown
+  const sourceCounts = {};
+  leads.forEach(l=>{ if(l.source){ sourceCounts[l.source] = (sourceCounts[l.source]||0)+1; } });
+  const sourceRows = Object.entries(sourceCounts).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([label,count])=>({label,count}));
+  el.appendChild(buildBreakdownSection('Leads by Source', sourceRows, totalLeads));
+
+  // recent activity feed
+  const feedSection = document.createElement('div');
+  feedSection.className = 'dash-section';
+  const feedTitle = document.createElement('h3');
+  feedTitle.textContent = 'Recent Activity';
+  feedSection.appendChild(feedTitle);
+
+  allActivity.sort((a,b)=> new Date(b.created_at) - new Date(a.created_at));
+  const recent = allActivity.slice(0, 15);
+  if(!recent.length){
+    const p = document.createElement('div');
+    p.className = 'empty-note';
+    p.textContent = 'No activity logged yet.';
+    feedSection.appendChild(p);
+  } else {
+    recent.forEach(a=>{
+      const lead = leads.find(l=>String(l.id)===String(a.lead_id));
+      const item = document.createElement('div');
+      item.className = 'activity-feed-item';
+      item.innerHTML = `${new Date(a.created_at).toLocaleString()} — <b>${escapeHtml(lead ? lead.name : 'Unknown lead')}</b> — ${a.action}${a.detail ? ': '+escapeHtml(a.detail) : ''}`;
+      feedSection.appendChild(item);
+    });
+  }
+  el.appendChild(feedSection);
+}
+
+function buildBreakdownSection(title, rows, total){
+  const section = document.createElement('div');
+  section.className = 'dash-section';
+  const h3 = document.createElement('h3');
+  h3.textContent = title;
+  section.appendChild(h3);
+  const nonZero = rows.filter(r=>r.count > 0);
+  if(!nonZero.length){
+    const p = document.createElement('div');
+    p.className = 'empty-note';
+    p.style.padding = '8px 0';
+    p.textContent = 'No data yet.';
+    section.appendChild(p);
+    return section;
+  }
+  const maxCount = Math.max(...nonZero.map(r=>r.count), 1);
+  nonZero.forEach(r=>{
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    const pct = (r.count / maxCount) * 100;
+    row.innerHTML = `<div class="bar-label">${escapeHtml(r.label)}</div><div class="bar-track"><div class="bar-fill-stat" style="width:${pct}%"></div></div><div class="bar-count">${r.count}</div>`;
+    section.appendChild(row);
+  });
+  return section;
 }
 
 function renderTemplatesTab(){
