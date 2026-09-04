@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 245 244 250;
+  --panel: 255 255 255;
+  --row: 251 250 254;
+  --border: 227 225 238;
+  --ink: 27 26 36;
+  --ink-dim: 107 105 128;
+}
+
+.dark {
+  --bg: 10 10 18;
+  --panel: 20 20 31;
+  --row: 24 24 38;
+  --border: 46 46 66;
+  --ink: 241 240 247;
+  --ink-dim: 142 140 163;
+}
+
+* {
+  border-color: rgb(var(--border));
+}
+
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--ink));
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgb(var(--border));
+  border-radius: 4px;
+}
