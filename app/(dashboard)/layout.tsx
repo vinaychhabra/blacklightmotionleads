@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import { Sidebar } from "@/components/sidebar";
+import { NotificationPanel } from "@/components/notification-panel";
 import { ToastProvider } from "@/components/toast-provider";
 import { ConfirmProvider } from "@/components/confirm-provider";
 
@@ -46,9 +47,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex h-screen overflow-hidden bg-bg">
           <Sidebar userEmail={session?.user?.email} />
           <main className="flex-1 overflow-y-auto scrollbar-thin">
-            <div className="mx-auto max-w-7xl px-5 py-7 md:px-8 lg:px-10">
+            <div className="mx-auto max-w-[1500px] px-5 py-7 md:px-8 lg:px-10">
               <div className="space-y-6">{children}</div>
             </div>
+            <NotificationPanel />
           </main>
         </div>
       </ConfirmProvider>

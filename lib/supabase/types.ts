@@ -73,6 +73,8 @@ export const STATUSES: LeadStatus[] = [
 
 export const PRIORITIES: Priority[] = ["Hot", "Warm", "Cold"];
 
+export type EmailProvider = "system_mailto" | "smtp" | "sendgrid" | "resend" | "mailgun" | "brevo" | "none";
+
 export interface AppSettings {
   id: number;
   company_name: string;
@@ -86,5 +88,18 @@ export interface AppSettings {
   website_enrichment_enabled?: boolean | null;
   email_enrichment_enabled?: boolean | null;
   ai_qualification_enabled?: boolean | null;
+  email_provider?: EmailProvider | string | null;
+  email_from_name?: string | null;
+  email_from_address?: string | null;
+  smtp_host?: string | null;
+  smtp_port?: number | string | null;
+  smtp_username?: string | null;
+  smtp_password?: string | null;
+  smtp_secure?: boolean | null;
+  sendgrid_api_key?: string | null;
+  resend_api_key?: string | null;
+  mailgun_api_key?: string | null;
+  mailgun_domain?: string | null;
+  brevo_api_key?: string | null;
   updated_at: string;
 }

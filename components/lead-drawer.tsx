@@ -154,13 +154,35 @@ export function LeadDrawer({
     if (currentLead.status === "New") patch({ status: "Contacted" });
   }
 
-  function handleSendEmail() {
+  async function handleSendEmail() {
     if (!currentLead.email || !currentTemplate) return;
     const msg = fillTemplate(currentTemplate.body, currentLead.name);
     const subj = fillTemplate(currentTemplate.subject || "Hi from Blacklight Motion", currentLead.name);
-    window.open(mailtoLink(currentLead.email, subj, msg), "_self");
-    addActivity("email_sent", currentTemplate.label);
-    if (currentLead.status === "New") patch({ status: "Contacted" });
+
+    try {
+      const response = await fetch("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: currentLead.email,
+          subject: subj,
+          text: msg,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok && result?.fallback) {
+        window.open(mailtoLink(currentLead.email, subj, msg), "_self");
+      } else if (!response.ok) {
+        throw new Error(result?.message || "Email send failed");
+      }
+
+      addActivity("email_sent", currentTemplate.label);
+      if (currentLead.status === "New") patch({ status: "Contacted" });
+    } catch (err: any) {
+      showToast(err.message || "Couldn't send email", "error");
+      window.open(mailtoLink(currentLead.email, subj, msg), "_self");
+    }
   }
 
   async function handleDelete() {

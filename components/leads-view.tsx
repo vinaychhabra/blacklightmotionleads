@@ -215,16 +215,38 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
     if (!lead.email || !currentTemplate) return;
     const msg = fillTemplate(currentTemplate.body, lead.name);
     const subj = fillTemplate(currentTemplate.subject || "Hi from Blacklight Motion", lead.name);
-    window.open(mailtoLink(lead.email, subj, msg), "_self");
+
     try {
+      const response = await fetch("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: lead.email,
+          subject: subj,
+          text: msg,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok && result?.fallback) {
+        window.open(mailtoLink(lead.email, subj, msg), "_self");
+      } else if (!response.ok) {
+        throw new Error(result?.message || "Email send failed");
+      }
+
       const entry = await logActivity(lead.id, "email_sent", currentTemplate.label);
       setActivity((prev) => [entry, ...prev]);
       if (lead.status === "New") {
         const updated = await updateLead(lead.id, { status: "Contacted" });
         setLeads((prev) => prev.map((l) => (l.id === lead.id ? updated : l)));
       }
+
+      if (!response.ok) {
+        showToast("Email was queued but not sent automatically", "default");
+      }
     } catch (err: any) {
-      showToast(err.message || "Couldn't log the send", "error");
+      showToast(err.message || "Couldn't send email", "error");
+      window.open(mailtoLink(lead.email, subj, msg), "_self");
     }
   }
 

@@ -18,6 +18,19 @@ export default function SettingsPage() {
   const [googlePlacesApiKey, setGooglePlacesApiKey] = useState("");
   const [aiProvider, setAiProvider] = useState("none");
   const [aiApiKey, setAiApiKey] = useState("");
+  const [emailProvider, setEmailProvider] = useState("system_mailto");
+  const [emailFromName, setEmailFromName] = useState("Blacklight Motion");
+  const [emailFromAddress, setEmailFromAddress] = useState("noreply@blacklightmotion.com");
+  const [smtpHost, setSmtpHost] = useState("");
+  const [smtpPort, setSmtpPort] = useState("587");
+  const [smtpUsername, setSmtpUsername] = useState("");
+  const [smtpPassword, setSmtpPassword] = useState("");
+  const [smtpSecure, setSmtpSecure] = useState(true);
+  const [sendgridApiKey, setSendgridApiKey] = useState("");
+  const [resendApiKey, setResendApiKey] = useState("");
+  const [mailgunApiKey, setMailgunApiKey] = useState("");
+  const [mailgunDomain, setMailgunDomain] = useState("");
+  const [brevoApiKey, setBrevoApiKey] = useState("");
   const [googleMapsEnabled, setGoogleMapsEnabled] = useState(false);
   const [websiteEnrichmentEnabled, setWebsiteEnrichmentEnabled] = useState(false);
   const [emailEnrichmentEnabled, setEmailEnrichmentEnabled] = useState(false);
@@ -39,6 +52,19 @@ export default function SettingsPage() {
         setGooglePlacesApiKey(s.google_places_api_key || "");
         setAiProvider(s.ai_provider || "none");
         setAiApiKey(s.ai_api_key || s.openai_api_key || "");
+        setEmailProvider(s.email_provider || "system_mailto");
+        setEmailFromName(s.email_from_name || "Blacklight Motion");
+        setEmailFromAddress(s.email_from_address || "noreply@blacklightmotion.com");
+        setSmtpHost(s.smtp_host || "");
+        setSmtpPort(String(s.smtp_port ?? 587));
+        setSmtpUsername(s.smtp_username || "");
+        setSmtpPassword(s.smtp_password || "");
+        setSmtpSecure(Boolean(s.smtp_secure ?? true));
+        setSendgridApiKey(s.sendgrid_api_key || "");
+        setResendApiKey(s.resend_api_key || "");
+        setMailgunApiKey(s.mailgun_api_key || "");
+        setMailgunDomain(s.mailgun_domain || "");
+        setBrevoApiKey(s.brevo_api_key || "");
         setGoogleMapsEnabled(Boolean(s.google_maps_api_enabled));
         setWebsiteEnrichmentEnabled(Boolean(s.website_enrichment_enabled));
         setEmailEnrichmentEnabled(Boolean(s.email_enrichment_enabled));
@@ -76,6 +102,19 @@ export default function SettingsPage() {
         ai_provider: aiProvider,
         ai_api_key: aiApiKey,
         openai_api_key: aiApiKey,
+        email_provider: emailProvider,
+        email_from_name: emailFromName,
+        email_from_address: emailFromAddress,
+        smtp_host: smtpHost,
+        smtp_port: Number(smtpPort) || 587,
+        smtp_username: smtpUsername,
+        smtp_password: smtpPassword,
+        smtp_secure: smtpSecure,
+        sendgrid_api_key: sendgridApiKey,
+        resend_api_key: resendApiKey,
+        mailgun_api_key: mailgunApiKey,
+        mailgun_domain: mailgunDomain,
+        brevo_api_key: brevoApiKey,
         google_maps_api_enabled: googleMapsEnabled,
         website_enrichment_enabled: websiteEnrichmentEnabled,
         email_enrichment_enabled: emailEnrichmentEnabled,
@@ -238,6 +277,171 @@ export default function SettingsPage() {
               className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
             />
           </label>
+        </div>
+      </section>
+
+      <section className="mb-6 soft-card rounded-xl p-4">
+        <h3 className="mb-3 font-display text-sm font-bold text-ink">Email delivery</h3>
+        <div className="space-y-4">
+          <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+            <span className="inline-flex items-center gap-1">
+              Outbound email provider
+              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border text-[9px] text-ink-dim" title="Choose how the CRM sends outbound email. SMTP sends directly from your server, while the default option just opens the local email app. Use a real provider for automatic sending.">?</span>
+            </span>
+            <select
+              value={emailProvider}
+              onChange={(e) => setEmailProvider(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+            >
+              <option value="system_mailto">System mail app (fallback)</option>
+              <option value="smtp">SMTP</option>
+              <option value="sendgrid">SendGrid</option>
+              <option value="resend">Resend</option>
+              <option value="mailgun">Mailgun</option>
+              <option value="brevo">Brevo</option>
+            </select>
+          </label>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+              From name
+              <input
+                value={emailFromName}
+                onChange={(e) => setEmailFromName(e.target.value)}
+                placeholder="Blacklight Motion"
+                className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+              />
+            </label>
+            <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+              From email
+              <input
+                value={emailFromAddress}
+                onChange={(e) => setEmailFromAddress(e.target.value)}
+                placeholder="noreply@yourdomain.com"
+                className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+              />
+            </label>
+          </div>
+
+          {(emailProvider === "smtp" || emailProvider === "system_mailto") && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+                SMTP host
+                <input
+                  value={smtpHost}
+                  onChange={(e) => setSmtpHost(e.target.value)}
+                  placeholder="smtp.yourprovider.com"
+                  className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+                />
+              </label>
+              <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+                SMTP port
+                <input
+                  value={smtpPort}
+                  onChange={(e) => setSmtpPort(e.target.value)}
+                  placeholder="587"
+                  className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+                />
+              </label>
+              <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+                SMTP username
+                <input
+                  value={smtpUsername}
+                  onChange={(e) => setSmtpUsername(e.target.value)}
+                  placeholder="SMTP username"
+                  className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+                />
+              </label>
+              <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+                SMTP password
+                <input
+                  type="password"
+                  value={smtpPassword}
+                  onChange={(e) => setSmtpPassword(e.target.value)}
+                  placeholder="SMTP password"
+                  className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+                />
+              </label>
+            </div>
+          )}
+
+          {emailProvider === "smtp" && (
+            <label className="flex items-center justify-between rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink">
+              <span className="inline-flex items-center gap-1">
+                Use TLS / SSL
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border text-[9px] text-ink-dim" title="Enable this for most modern SMTP providers like Gmail, SendGrid, Mailgun, and Microsoft 365 SMTP.">?</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={smtpSecure}
+                onChange={(e) => setSmtpSecure(e.target.checked)}
+                className="h-4 w-4"
+              />
+            </label>
+          )}
+
+          {emailProvider === "sendgrid" && (
+            <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+              SendGrid API key
+              <input
+                type="password"
+                value={sendgridApiKey}
+                onChange={(e) => setSendgridApiKey(e.target.value)}
+                placeholder="SG.xxx..."
+                className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+              />
+            </label>
+          )}
+
+          {emailProvider === "resend" && (
+            <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+              Resend API key
+              <input
+                type="password"
+                value={resendApiKey}
+                onChange={(e) => setResendApiKey(e.target.value)}
+                placeholder="re_xxx..."
+                className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+              />
+            </label>
+          )}
+
+          {emailProvider === "mailgun" && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+                Mailgun API key
+                <input
+                  type="password"
+                  value={mailgunApiKey}
+                  onChange={(e) => setMailgunApiKey(e.target.value)}
+                  placeholder="key-xxx"
+                  className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+                />
+              </label>
+              <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+                Mailgun domain
+                <input
+                  value={mailgunDomain}
+                  onChange={(e) => setMailgunDomain(e.target.value)}
+                  placeholder="mg.yourdomain.com"
+                  className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+                />
+              </label>
+            </div>
+          )}
+
+          {emailProvider === "brevo" && (
+            <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+              Brevo API key
+              <input
+                type="password"
+                value={brevoApiKey}
+                onChange={(e) => setBrevoApiKey(e.target.value)}
+                placeholder="xkeysib-..."
+                className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+              />
+            </label>
+          )}
 
           <div className="grid gap-3 md:grid-cols-2">
             {[
@@ -265,7 +469,7 @@ export default function SettingsPage() {
             onClick={handleSaveIntegrations}
             className="rounded-lg bg-gradient-to-r from-amber to-cyan px-4 py-2 text-xs font-semibold text-black"
           >
-            Save integrations
+            Save settings
           </button>
         </div>
       </section>

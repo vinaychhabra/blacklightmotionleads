@@ -20,6 +20,19 @@ create table if not exists app_settings (
   website_enrichment_enabled boolean default false,
   email_enrichment_enabled boolean default false,
   ai_qualification_enabled boolean default false,
+  email_provider text default 'system_mailto' check (email_provider in ('system_mailto', 'smtp', 'sendgrid', 'resend', 'mailgun', 'brevo', 'none')),
+  email_from_name text default 'Blacklight Motion',
+  email_from_address text default 'noreply@blacklightmotion.com',
+  smtp_host text default '',
+  smtp_port int default 587,
+  smtp_username text default '',
+  smtp_password text default '',
+  smtp_secure boolean default true,
+  sendgrid_api_key text default '',
+  resend_api_key text default '',
+  mailgun_api_key text default '',
+  mailgun_domain text default '',
+  brevo_api_key text default '',
   updated_at timestamptz not null default now(),
   constraint app_settings_singleton check (id = 1)
 );
@@ -35,7 +48,20 @@ insert into app_settings (
   google_maps_api_enabled,
   website_enrichment_enabled,
   email_enrichment_enabled,
-  ai_qualification_enabled
+  ai_qualification_enabled,
+  email_provider,
+  email_from_name,
+  email_from_address,
+  smtp_host,
+  smtp_port,
+  smtp_username,
+  smtp_password,
+  smtp_secure,
+  sendgrid_api_key,
+  resend_api_key,
+  mailgun_api_key,
+  mailgun_domain,
+  brevo_api_key
 )
 values (
   1,
@@ -48,7 +74,20 @@ values (
   false,
   false,
   false,
-  false
+  false,
+  'system_mailto',
+  'Blacklight Motion',
+  'noreply@blacklightmotion.com',
+  '',
+  587,
+  '',
+  '',
+  true,
+  '',
+  '',
+  '',
+  '',
+  ''
 )
 on conflict (id) do nothing;
 
