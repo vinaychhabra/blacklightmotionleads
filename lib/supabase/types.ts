@@ -12,10 +12,29 @@ export type Priority = "Hot" | "Warm" | "Cold";
 export interface Lead {
   id: string;
   name: string;
+  company_name?: string | null;
+  business_category?: string | null;
+  description?: string | null;
   city: string | null;
   phone: string | null;
   email: string | null;
+  website?: string | null;
+  address?: string | null;
+  state?: string | null;
+  country?: string | null;
+  postal_code?: string | null;
   source: string | null;
+  source_url?: string | null;
+  external_place_id?: string | null;
+  rating?: number | null;
+  review_count?: number | null;
+  facebook_url?: string | null;
+  instagram_url?: string | null;
+  linkedin_url?: string | null;
+  youtube_url?: string | null;
+  contact_page_url?: string | null;
+  lead_score?: number | null;
+  lead_temperature?: "HOT" | "WARM" | "COLD" | null;
   status: LeadStatus;
   notes: string | null;
   priority: Priority;
@@ -23,6 +42,7 @@ export interface Lead {
   follow_up_date: string | null; // ISO date, e.g. "2026-09-01"
   lost_reason: string | null;
   created_at: string;
+  updated_at?: string | null;
   last_contacted_at: string | null;
 }
 
@@ -57,5 +77,14 @@ export interface AppSettings {
   id: number;
   company_name: string;
   logo_url: string | null;
+  lead_provider?: "demo" | "google_places" | string | null;
+  google_places_api_key?: string | null;
+  ai_provider?: "none" | "openai" | "anthropic" | "google_gemini" | "azure_openai" | "groq" | string | null;
+  ai_api_key?: string | null;
+  openai_api_key?: string | null;
+  google_maps_api_enabled?: boolean | null;
+  website_enrichment_enabled?: boolean | null;
+  email_enrichment_enabled?: boolean | null;
+  ai_qualification_enabled?: boolean | null;
   updated_at: string;
 }

@@ -46,7 +46,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex h-screen overflow-hidden bg-bg">
           <Sidebar userEmail={session?.user?.email} />
           <main className="flex-1 overflow-y-auto scrollbar-thin">
-            <div className="mx-auto max-w-7xl px-8 py-8">{children}</div>
+            <div className="mx-auto max-w-7xl px-5 py-7 md:px-8 lg:px-10">
+              <div className="space-y-6">{children}</div>
+            </div>
           </main>
         </div>
       </ConfirmProvider>

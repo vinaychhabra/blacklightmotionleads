@@ -11,12 +11,45 @@ create table if not exists app_settings (
   id int primary key default 1,
   company_name text not null default 'Blacklight Motion',
   logo_url text,
+  lead_provider text default 'demo' check (lead_provider in ('demo', 'google_places')),
+  google_places_api_key text default '',
+  ai_provider text default 'none' check (ai_provider in ('none', 'openai', 'anthropic', 'google_gemini', 'azure_openai', 'groq')),
+  ai_api_key text default '',
+  openai_api_key text default '',
+  google_maps_api_enabled boolean default false,
+  website_enrichment_enabled boolean default false,
+  email_enrichment_enabled boolean default false,
+  ai_qualification_enabled boolean default false,
   updated_at timestamptz not null default now(),
   constraint app_settings_singleton check (id = 1)
 );
 
-insert into app_settings (id, company_name)
-values (1, 'Blacklight Motion')
+insert into app_settings (
+  id,
+  company_name,
+  lead_provider,
+  google_places_api_key,
+  ai_provider,
+  ai_api_key,
+  openai_api_key,
+  google_maps_api_enabled,
+  website_enrichment_enabled,
+  email_enrichment_enabled,
+  ai_qualification_enabled
+)
+values (
+  1,
+  'Blacklight Motion',
+  'demo',
+  '',
+  'none',
+  '',
+  '',
+  false,
+  false,
+  false,
+  false
+)
 on conflict (id) do nothing;
 
 alter table app_settings enable row level security;

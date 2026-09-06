@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { X, MessageCircle, Mail, Trash2 } from "lucide-react";
 import type { Lead, ActivityLogEntry, Template, LeadStatus, Priority } from "@/lib/supabase/types";
 import { STATUSES, PRIORITIES } from "@/lib/supabase/types";
-import { updateLead, deleteLead, logActivity } from "@/lib/supabase/queries";
+import { updateLead, deleteLead, logActivity, insertLead } from "@/lib/supabase/queries";
 import { fillTemplate, waLink, mailtoLink } from "@/lib/messaging";
 import { StatusBadge } from "@/components/status-badge";
 import { useToast } from "@/components/toast-provider";
@@ -35,9 +35,31 @@ export function LeadDrawer({
 }: Props) {
   const { showToast } = useToast();
   const confirm = useConfirm();
-  const lead = leads.find((l) => l.id === leadId);
+  const [savedLeadId, setSavedLeadId] = useState<string | null>(null);
+  const existingLead = leads.find((l) => l.id === leadId);
+  const isDraft = leadId === "__new__" && !savedLeadId;
+  const [draftLead, setDraftLead] = useState<Lead | null>(() =>
+    existingLead ?? {
+      id: "__new__",
+      name: "",
+      city: null,
+      phone: null,
+      email: null,
+      source: null,
+      status: "New",
+      notes: null,
+      priority: "Warm",
+      deal_value: null,
+      follow_up_date: null,
+      lost_reason: null,
+      created_at: new Date().toISOString(),
+      last_contacted_at: null,
+    }
+  );
   const [showLostReason, setShowLostReason] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<LeadStatus | null>(null);
+
+  const lead = existingLead ?? draftLead;
 
   const entries = useMemo(
     () => (activityByLead[leadId] || []).slice(0, 15),
@@ -47,19 +69,58 @@ export function LeadDrawer({
   const currentTemplate = templates.find((t) => t.id === templateId) || templates[0];
 
   if (!lead) return null;
+  const currentLead = lead;
 
   async function patch(fields: Partial<Lead>) {
+    if (isDraft && !existingLead) {
+      const sanitized = {
+        ...currentLead,
+        ...fields,
+        name: (fields.name ?? currentLead.name ?? "").trim() || (currentLead.name ?? "").trim() || "",
+        phone: (fields.phone ?? currentLead.phone ?? "").trim() || (currentLead.phone ?? "").trim() || null,
+        email: (fields.email ?? currentLead.email ?? "").trim() || (currentLead.email ?? "").trim() || null,
+        city: (fields.city ?? currentLead.city ?? "").trim() || (currentLead.city ?? "").trim() || null,
+        source: (fields.source ?? currentLead.source ?? "").trim() || (currentLead.source ?? "").trim() || null,
+      };
+
+      const hasMeaningfulData = Boolean(
+        sanitized.name || sanitized.phone || sanitized.email || sanitized.city || sanitized.source || sanitized.notes
+      );
+
+      if (!hasMeaningfulData) return;
+
+      try {
+        const created = await insertLead({
+          ...sanitized,
+          name: sanitized.name || "New Lead",
+          status: sanitized.status || "New",
+          priority: sanitized.priority || "Warm",
+          source: sanitized.source || "Manual entry",
+        });
+        setLeads((prev) => [created, ...prev]);
+        setSavedLeadId(created.id);
+        setDraftLead(created);
+      } catch (err: any) {
+        showToast(err.message || "Could not create lead", "error");
+      }
+      return;
+    }
+
     try {
-      const updated = await updateLead(lead!.id, fields);
-      setLeads((prev) => prev.map((l) => (l.id === lead!.id ? updated : l)));
+      const updated = await updateLead(currentLead.id, fields);
+      setLeads((prev) => prev.map((l) => (l.id === currentLead.id ? updated : l)));
+      if (isDraft && !existingLead) {
+        setDraftLead(updated);
+      }
     } catch (err: any) {
       showToast(err.message || "Update failed", "error");
     }
   }
 
   async function addActivity(action: string, detail = "") {
+    if (!currentLead.id || currentLead.id === "__new__") return;
     try {
-      const entry = await logActivity(lead!.id, action, detail);
+      const entry = await logActivity(currentLead.id, action, detail);
       setActivity((prev) => [entry, ...prev]);
     } catch {
       // non-fatal — activity logging failure shouldn't block the user's action
@@ -72,13 +133,13 @@ export function LeadDrawer({
       setShowLostReason(true);
       return;
     }
-    const oldStatus = lead!.status;
+    const oldStatus = currentLead.status;
     patch({ status: newStatus });
     addActivity("status_changed", `${oldStatus} → ${newStatus}`);
   }
 
   function confirmLostReason(reason: string) {
-    const oldStatus = lead!.status;
+    const oldStatus = currentLead.status;
     patch({ status: "Client Denied", lost_reason: reason });
     addActivity("status_changed", `${oldStatus} → Client Denied`);
     setShowLostReason(false);
@@ -86,33 +147,37 @@ export function LeadDrawer({
   }
 
   function handleSendWhatsApp() {
-    if (!lead!.phone || !currentTemplate) return;
-    const msg = fillTemplate(currentTemplate.body, lead!.name);
-    window.open(waLink(lead!.phone, msg), "_blank");
+    if (!currentLead.phone || !currentTemplate) return;
+    const msg = fillTemplate(currentTemplate.body, currentLead.name);
+    window.open(waLink(currentLead.phone, msg), "_blank");
     addActivity("whatsapp_sent", currentTemplate.label);
-    if (lead!.status === "New") patch({ status: "Contacted" });
+    if (currentLead.status === "New") patch({ status: "Contacted" });
   }
 
   function handleSendEmail() {
-    if (!lead!.email || !currentTemplate) return;
-    const msg = fillTemplate(currentTemplate.body, lead!.name);
-    const subj = fillTemplate(currentTemplate.subject || "Hi from Blacklight Motion", lead!.name);
-    window.open(mailtoLink(lead!.email, subj, msg), "_self");
+    if (!currentLead.email || !currentTemplate) return;
+    const msg = fillTemplate(currentTemplate.body, currentLead.name);
+    const subj = fillTemplate(currentTemplate.subject || "Hi from Blacklight Motion", currentLead.name);
+    window.open(mailtoLink(currentLead.email, subj, msg), "_self");
     addActivity("email_sent", currentTemplate.label);
-    if (lead!.status === "New") patch({ status: "Contacted" });
+    if (currentLead.status === "New") patch({ status: "Contacted" });
   }
 
   async function handleDelete() {
+    if (currentLead.id === "__new__") {
+      onClose();
+      return;
+    }
     const ok = await confirm({
       title: "Delete lead",
-      message: `Delete "${lead!.name}" permanently? This can't be undone.`,
+      message: `Delete "${currentLead.name}" permanently? This can't be undone.`,
       confirmLabel: "Delete",
       danger: true,
     });
     if (!ok) return;
     try {
-      await deleteLead(lead!.id);
-      setLeads((prev) => prev.filter((l) => l.id !== lead!.id));
+      await deleteLead(currentLead.id);
+      setLeads((prev) => prev.filter((l) => l.id !== currentLead.id));
       showToast("Lead deleted", "success");
       onClose();
     } catch (err: any) {
@@ -266,12 +331,14 @@ export function LeadDrawer({
             )}
           </div>
 
-          <button
-            onClick={handleDelete}
-            className="mt-6 flex items-center gap-1.5 text-xs font-medium text-danger hover:underline"
-          >
-            <Trash2 size={13} /> Delete lead
-          </button>
+          {lead.id !== "__new__" && (
+            <button
+              onClick={handleDelete}
+              className="mt-6 flex items-center gap-1.5 text-xs font-medium text-danger hover:underline"
+            >
+              <Trash2 size={13} /> Delete lead
+            </button>
+          )}
         </div>
       </div>
 

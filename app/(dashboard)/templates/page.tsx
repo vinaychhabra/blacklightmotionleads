@@ -75,7 +75,7 @@ export default function TemplatesPage() {
 
       <button
         onClick={handleAdd}
-        className="mb-5 flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber to-cyan px-3.5 py-2 text-xs font-semibold text-black"
+        className="mb-4 flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber to-cyan px-3 py-1.5 text-xs font-semibold text-black"
       >
         <Plus size={14} /> Add template
       </button>
@@ -85,7 +85,7 @@ export default function TemplatesPage() {
           No templates yet — add one above.
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {templates.map((t) => (
             <TemplateCard
               key={t.id}
@@ -116,7 +116,7 @@ function TemplateCard({
   const preview = fillTemplate(body, "Rohan");
 
   return (
-    <div className="rounded-xl border border-border bg-panel p-5">
+    <div className="soft-card rounded-xl p-4">
       <div className="mb-3 flex items-center gap-3">
         <input
           value={label}

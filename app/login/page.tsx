@@ -41,17 +41,19 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg px-4">
-      <div className="w-full max-w-sm rounded-xl border border-border bg-panel p-8 shadow-xl">
-        <div className="mb-8 flex flex-col items-center text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={logoUrl} alt={companyName} className="mb-3 h-16 w-16 rounded-lg object-cover" />
-          <h1 className="font-display text-lg font-bold uppercase text-ink">{companyName}</h1>
-          <p className="mt-1 text-xs uppercase tracking-widest text-ink-dim">CRM — Sign in</p>
+      <div className="panel-surface w-full max-w-sm rounded-2xl p-6 shadow-[0_18px_42px_rgba(15,23,42,0.08)]">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <div className="mb-3 flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-amber-400 to-cyan-400 p-1 shadow-sm">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={logoUrl} alt={companyName} className="h-full w-full rounded-lg object-cover" />
+          </div>
+          <h1 className="font-display text-base font-bold uppercase tracking-[0.12em] text-ink">{companyName}</h1>
+          <p className="mt-1 text-[10px] uppercase tracking-[0.24em] text-ink-dim">CRM — Sign in</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-ink-dim">
+            <label className="mb-1.5 block text-[10px] font-medium uppercase tracking-[0.18em] text-ink-dim">
               Email
             </label>
             <input
@@ -64,7 +66,7 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-ink-dim">
+            <label className="mb-1.5 block text-[10px] font-medium uppercase tracking-[0.18em] text-ink-dim">
               Password
             </label>
             <input

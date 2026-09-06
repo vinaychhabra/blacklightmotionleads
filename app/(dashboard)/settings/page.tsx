@@ -14,6 +14,14 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [companyName, setCompanyName] = useState("");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [leadProvider, setLeadProvider] = useState("demo");
+  const [googlePlacesApiKey, setGooglePlacesApiKey] = useState("");
+  const [aiProvider, setAiProvider] = useState("none");
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [googleMapsEnabled, setGoogleMapsEnabled] = useState(false);
+  const [websiteEnrichmentEnabled, setWebsiteEnrichmentEnabled] = useState(false);
+  const [emailEnrichmentEnabled, setEmailEnrichmentEnabled] = useState(false);
+  const [aiQualificationEnabled, setAiQualificationEnabled] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [email, setEmail] = useState<string | undefined>();
   const [needsMigration, setNeedsMigration] = useState(false);
@@ -27,6 +35,14 @@ export default function SettingsPage() {
         setSettings(s);
         setCompanyName(s.company_name);
         setLogoPreview(s.logo_url);
+        setLeadProvider(s.lead_provider || "demo");
+        setGooglePlacesApiKey(s.google_places_api_key || "");
+        setAiProvider(s.ai_provider || "none");
+        setAiApiKey(s.ai_api_key || s.openai_api_key || "");
+        setGoogleMapsEnabled(Boolean(s.google_maps_api_enabled));
+        setWebsiteEnrichmentEnabled(Boolean(s.website_enrichment_enabled));
+        setEmailEnrichmentEnabled(Boolean(s.email_enrichment_enabled));
+        setAiQualificationEnabled(Boolean(s.ai_qualification_enabled));
       })
       .catch((err) => {
         const msg = err?.message || "";
@@ -48,6 +64,27 @@ export default function SettingsPage() {
       showToast("Company name updated", "success");
     } catch (err: any) {
       showToast(err.message || "Save failed", "error");
+    }
+  }
+
+  async function handleSaveIntegrations() {
+    if (!settings) return;
+    try {
+      const updated = await updateSettings({
+        lead_provider: leadProvider,
+        google_places_api_key: googlePlacesApiKey,
+        ai_provider: aiProvider,
+        ai_api_key: aiApiKey,
+        openai_api_key: aiApiKey,
+        google_maps_api_enabled: googleMapsEnabled,
+        website_enrichment_enabled: websiteEnrichmentEnabled,
+        email_enrichment_enabled: emailEnrichmentEnabled,
+        ai_qualification_enabled: aiQualificationEnabled,
+      });
+      setSettings(updated);
+      showToast("Integration settings saved", "success");
+    } catch (err: any) {
+      showToast(err.message || "Could not save integration settings", "error");
     }
   }
 
@@ -92,12 +129,11 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Branding */}
       {!needsMigration && (
-      <section className="mb-8 rounded-xl border border-border bg-panel p-5">
-        <h3 className="mb-4 font-display text-sm font-bold text-ink">Branding</h3>
+      <section className="mb-6 soft-card rounded-xl p-4">
+        <h3 className="mb-3 font-display text-sm font-bold text-ink">Branding</h3>
 
-        <div className="mb-5 flex items-center gap-4">
+        <div className="mb-4 flex items-center gap-4">
           <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-row">
             {logoPreview ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -137,6 +173,102 @@ export default function SettingsPage() {
         </div>
       </section>
       )}
+
+      <section className="mb-6 soft-card rounded-xl p-4">
+        <h3 className="mb-3 font-display text-sm font-bold text-ink">AI & integrations</h3>
+        <div className="space-y-4">
+          <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+            <span className="inline-flex items-center gap-1">
+              Lead provider
+              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border text-[9px] text-ink-dim" title="This chooses the source of business data. Demo is a local mock; Google Places fetches live businesses from Maps when you provide a key.">?</span>
+            </span>
+            <select
+              value={leadProvider}
+              onChange={(e) => setLeadProvider(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+            >
+              <option value="demo">Demo provider</option>
+              <option value="google_places">Google Places</option>
+            </select>
+          </label>
+
+          <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+            <span className="inline-flex items-center gap-1">
+              Google Places API key
+              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border text-[9px] text-ink-dim" title="Required only if you want the system to discover real businesses from Google Maps and Places. This lets the app pull live local business records.">?</span>
+            </span>
+            <input
+              type="password"
+              value={googlePlacesApiKey}
+              onChange={(e) => setGooglePlacesApiKey(e.target.value)}
+              placeholder="Enter your Google Places key"
+              className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+            />
+          </label>
+
+          <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+            <span className="inline-flex items-center gap-1">
+              AI provider
+              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border text-[9px] text-ink-dim" title="This selects the AI model that powers lead scoring, summaries, and qualification. You can switch between providers depending on your cost and usage needs.">?</span>
+            </span>
+            <select
+              value={aiProvider}
+              onChange={(e) => setAiProvider(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+            >
+              <option value="none">No AI provider</option>
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic Claude</option>
+              <option value="google_gemini">Google Gemini</option>
+              <option value="azure_openai">Azure OpenAI</option>
+              <option value="groq">Groq</option>
+            </select>
+          </label>
+
+          <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+            <span className="inline-flex items-center gap-1">
+              AI API key
+              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border text-[9px] text-ink-dim" title="This is the secret key for the selected AI provider. It is used for AI scoring, summarization, and lead qualification. Keep this private and only use the provider you selected.">?</span>
+            </span>
+            <input
+              type="password"
+              value={aiApiKey}
+              onChange={(e) => setAiApiKey(e.target.value)}
+              placeholder="Enter your AI provider key"
+              className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
+            />
+          </label>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            {[
+              { key: "googleMapsEnabled", label: "Google Maps enabled", value: googleMapsEnabled, setter: setGoogleMapsEnabled, tooltip: "Enables location-based enrichment and map lookups for businesses." },
+              { key: "websiteEnrichmentEnabled", label: "Website enrichment", value: websiteEnrichmentEnabled, setter: setWebsiteEnrichmentEnabled, tooltip: "Pulls website metadata, contact pages, and niche context for each lead." },
+              { key: "emailEnrichmentEnabled", label: "Email enrichment", value: emailEnrichmentEnabled, setter: setEmailEnrichmentEnabled, tooltip: "Tries to discover valid business emails and contact signals from public information." },
+              { key: "aiQualificationEnabled", label: "AI qualification", value: aiQualificationEnabled, setter: setAiQualificationEnabled, tooltip: "Lets the AI rank and qualify leads automatically based on your business rules." },
+            ].map(({ key, label, value, setter, tooltip }) => (
+              <label key={key} className="flex items-center justify-between rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink">
+                <span className="inline-flex items-center gap-1">
+                  {label}
+                  <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border text-[9px] text-ink-dim" title={tooltip}>?</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={value}
+                  onChange={(e) => setter(e.target.checked)}
+                  className="h-4 w-4"
+                />
+              </label>
+            ))}
+          </div>
+
+          <button
+            onClick={handleSaveIntegrations}
+            className="rounded-lg bg-gradient-to-r from-amber to-cyan px-4 py-2 text-xs font-semibold text-black"
+          >
+            Save integrations
+          </button>
+        </div>
+      </section>
 
       {/* Column customization */}
       <section className="mb-8 rounded-xl border border-border bg-panel p-5">

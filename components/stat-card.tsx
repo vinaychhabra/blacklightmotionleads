@@ -8,9 +8,13 @@ export function StatCard({
   accent?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-panel p-4">
+    <div className="panel-surface rounded-xl p-3.5">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[9.5px] font-semibold uppercase tracking-[0.18em] text-ink-dim">{label}</span>
+        <span className={`h-2 w-2 rounded-full ${accent ? "bg-gradient-to-r from-amber to-cyan" : "bg-slate-300 dark:bg-slate-600"}`} />
+      </div>
       <div
-        className={`font-display text-2xl font-bold ${
+        className={`metric-value font-display text-xl font-bold leading-none md:text-2xl ${
           accent
             ? "bg-gradient-to-r from-amber to-cyan bg-clip-text text-transparent"
             : "text-ink"
@@ -18,7 +22,6 @@ export function StatCard({
       >
         {value}
       </div>
-      <div className="mt-1 text-[10.5px] uppercase tracking-wide text-ink-dim">{label}</div>
     </div>
   );
 }

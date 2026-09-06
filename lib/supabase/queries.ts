@@ -1,6 +1,61 @@
 import { supabase } from "./client";
 import type { Lead, ActivityLogEntry, Template, AppSettings } from "./types";
 
+export interface ScrapedLeadRecord {
+  id?: string;
+  campaign_id?: string | null;
+  company_name?: string | null;
+  business_category?: string | null;
+  description?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  postal_code?: string | null;
+  source?: string | null;
+  source_url?: string | null;
+  external_place_id?: string | null;
+  rating?: number | null;
+  review_count?: number | null;
+  facebook_url?: string | null;
+  instagram_url?: string | null;
+  linkedin_url?: string | null;
+  youtube_url?: string | null;
+  lead_score?: number | null;
+  lead_temperature?: "HOT" | "WARM" | "COLD" | null;
+  ai_relevance?: boolean | null;
+  ai_reason?: string | null;
+  enrichment_status?: string | null;
+  review_status?: string | null;
+  notes?: string | null;
+  tags?: string[] | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface LeadGenerationCampaignRecord {
+  id?: string;
+  name?: string;
+  category?: string | null;
+  location?: string | null;
+  keywords?: string[] | null;
+  requested_leads?: number | null;
+  queries_generated?: number | null;
+  businesses_discovered?: number | null;
+  duplicates_removed?: number | null;
+  unique_leads?: number | null;
+  websites_enriched?: number | null;
+  emails_found?: number | null;
+  hot_count?: number | null;
+  warm_count?: number | null;
+  cold_count?: number | null;
+  status?: string | null;
+  created_at?: string | null;
+}
+
 export async function fetchLeads(): Promise<Lead[]> {
   const { data, error } = await supabase
     .from("leads")
@@ -92,6 +147,47 @@ export async function updateTemplate(id: string, fields: Partial<Template>): Pro
 export async function deleteTemplate(id: string): Promise<void> {
   const { error } = await supabase.from("templates").delete().eq("id", id);
   if (error) throw error;
+}
+
+export async function fetchScrapedLeads(): Promise<ScrapedLeadRecord[]> {
+  const { data, error } = await supabase
+    .from("scraped_leads")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as ScrapedLeadRecord[];
+}
+
+export async function upsertScrapedLead(row: ScrapedLeadRecord): Promise<ScrapedLeadRecord> {
+  const { data, error } = await supabase.from("scraped_leads").upsert(row, { onConflict: "external_place_id" }).select().single();
+  if (error) throw error;
+  return data as ScrapedLeadRecord;
+}
+
+export async function updateScrapedLead(id: string, fields: Partial<ScrapedLeadRecord>): Promise<ScrapedLeadRecord> {
+  const { data, error } = await supabase
+    .from("scraped_leads")
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ScrapedLeadRecord;
+}
+
+export async function fetchLeadGenerationCampaigns(): Promise<LeadGenerationCampaignRecord[]> {
+  const { data, error } = await supabase
+    .from("lead_generation_campaigns")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as LeadGenerationCampaignRecord[];
+}
+
+export async function insertLeadGenerationCampaign(row: LeadGenerationCampaignRecord): Promise<LeadGenerationCampaignRecord> {
+  const { data, error } = await supabase.from("lead_generation_campaigns").insert(row).select().single();
+  if (error) throw error;
+  return data as LeadGenerationCampaignRecord;
 }
 
 export async function fetchSettings(): Promise<AppSettings> {

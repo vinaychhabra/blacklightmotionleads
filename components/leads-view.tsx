@@ -188,13 +188,7 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
   }
 
   async function handleAddLead() {
-    try {
-      const saved = await insertLead({ name: "New Lead", status: "New" });
-      setLeads((prev) => [saved, ...prev]);
-      setOpenLeadId(saved.id);
-    } catch (err: any) {
-      showToast(err.message || "Could not add lead", "error");
-    }
+    setOpenLeadId("__new__");
   }
 
   const currentTemplate = templates.find((t) => t.id === templateId) || templates[0];
@@ -371,14 +365,14 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
               <button
                 key={s}
                 onClick={() => { setStatusFilter(s as any); resetPage(); }}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
                   active
                     ? "border-transparent bg-gradient-to-r from-amber to-cyan text-black"
                     : "border-border bg-panel text-ink-dim hover:text-ink"
                 }`}
               >
                 {s === "all" ? "All" : s}
-                <span className={`font-mono text-[10px] ${active ? "text-black/70" : "text-ink-dim"}`}>{count}</span>
+                <span className={`font-mono text-[9.5px] ${active ? "text-black/70" : "text-ink-dim"}`}>{count}</span>
               </button>
             );
           })}
