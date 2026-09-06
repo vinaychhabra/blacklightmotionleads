@@ -1,0 +1,11 @@
+{
+  "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js",
+  "/(dashboard)/followups/page": "app/(dashboard)/followups/page.js",
+  "/(dashboard)/leads/page": "app/(dashboard)/leads/page.js",
+  "/(dashboard)/settings/page": "app/(dashboard)/settings/page.js",
+  "/(dashboard)/templates/page": "app/(dashboard)/templates/page.js",
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/login/page": "app/login/page.js",
+  "/page": "app/page.js"
+}
