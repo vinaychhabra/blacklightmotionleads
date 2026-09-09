@@ -3,8 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
 
 async function getEmailSettings() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const supabaseUrl = "https://bmhsjutyqplvwlkuarbr.supabase.co" //process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseAnonKey = "sb_publishable_5SkqsKU8jNnwKF22Wf1W5A_rA7Ufckm" //process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error("Server Supabase environment variables are missing. Configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
@@ -24,7 +24,7 @@ function isTruthy(value: unknown): boolean {
   return value === true || value === "true" || value === 1 || value === "1";
 }
 
-async function sendWithSmtp(settings: Record<string, any>, to: string, subject: string, text: string) {
+async function sendWithSmtp(settings: Record<string, any>, to: string, subject: string, text: string, html?: string) {
   const host = String(settings.smtp_host || "").trim();
   const username = String(settings.smtp_username || "").trim();
   const password = String(settings.smtp_password || "").trim();
@@ -53,6 +53,7 @@ async function sendWithSmtp(settings: Record<string, any>, to: string, subject: 
     to,
     subject,
     text,
+    ...(html ? { html } : {}),
   });
 
   return { ok: true, provider: "smtp" };
@@ -193,6 +194,7 @@ export async function POST(request: Request) {
       to?: string;
       subject?: string;
       text?: string;
+      html?: string;
       fromName?: string;
       fromEmail?: string;
     };
@@ -200,6 +202,7 @@ export async function POST(request: Request) {
     const to = String(body.to || "").trim();
     const subject = String(body.subject || "New message").trim();
     const text = String(body.text || "").trim();
+    const html = String(body.html || "").trim();
 
     if (!to) {
       return NextResponse.json({ success: false, code: "INVALID_EMAIL", message: "No recipient email was provided." }, { status: 400 });
@@ -223,7 +226,7 @@ export async function POST(request: Request) {
 
     switch (providerName) {
       case "smtp":
-        result = await sendWithSmtp(settings, to, subject, text);
+        result = await sendWithSmtp(settings, to, subject, text, html);
         break;
       case "sendgrid":
         result = await sendWithSendgrid(settings, to, subject, text);

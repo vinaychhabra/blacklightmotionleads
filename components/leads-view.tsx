@@ -238,6 +238,7 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
 
       const entry = await logActivity(lead.id, "email_sent", currentTemplate.label);
       setActivity((prev) => [entry, ...prev]);
+      showToast("1 email sent successfully", "success");
       if (lead.status === "New") {
         const updated = await updateLead(lead.id, { status: "Contacted" });
         setLeads((prev) => prev.map((l) => (l.id === lead.id ? updated : l)));

@@ -182,6 +182,7 @@ export function LeadDrawer({
       }
 
       addActivity("email_sent", currentTemplate.label);
+      showToast("1 email sent successfully", "success");
       if (currentLead.status === "New") patch({ status: "Contacted" });
     } catch (err: any) {
       showToast(err.message || "Couldn't send email", "error");

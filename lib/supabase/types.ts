@@ -56,8 +56,12 @@ export interface ActivityLogEntry {
 export interface Template {
   id: string;
   label: string;
+  channel?: "whatsapp" | "email" | "both" | string | null;
   subject: string;
   body: string;
+  image_url?: string | null;
+  cta_label?: string | null;
+  cta_url?: string | null;
 }
 
 export const STATUSES: LeadStatus[] = [
