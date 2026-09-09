@@ -9,7 +9,7 @@ export function BreakdownSection({
   const maxCount = Math.max(...nonZero.map((r) => r.count), 1);
 
   return (
-    <div className="soft-card rounded-xl p-3.5 md:p-4">
+    <div className="glass-surface rounded-lg p-3.5 md:p-4">
       <h3 className="mb-3 font-display text-sm font-bold tracking-tight text-ink">{title}</h3>
       {nonZero.length === 0 ? (
         <p className="text-xs text-ink-dim">No data yet.</p>

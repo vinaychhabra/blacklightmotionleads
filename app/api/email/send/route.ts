@@ -7,14 +7,14 @@ async function getEmailSettings() {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    return {} as Record<string, any>;
+    throw new Error("Server Supabase environment variables are missing. Configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
   }
 
   const client = createClient(supabaseUrl, supabaseAnonKey);
   const { data, error } = await client.from("app_settings").select("*").eq("id", 1).maybeSingle();
 
   if (error || !data) {
-    return {} as Record<string, any>;
+    throw new Error(error?.message || "Could not load saved email settings from Supabase.");
   }
 
   return data;
@@ -28,6 +28,7 @@ async function sendWithSmtp(settings: Record<string, any>, to: string, subject: 
   const host = String(settings.smtp_host || "").trim();
   const username = String(settings.smtp_username || "").trim();
   const password = String(settings.smtp_password || "").trim();
+  const port = Number(settings.smtp_port ?? 587);
   const fromAddress = String(settings.email_from_address || settings.smtp_username || username || "noreply@blacklightmotion.com").trim();
   const fromName = String(settings.email_from_name || "Blacklight Motion").trim();
 
@@ -38,8 +39,9 @@ async function sendWithSmtp(settings: Record<string, any>, to: string, subject: 
 
   const transporter = nodemailer.createTransport({
     host,
-    port: Number(settings.smtp_port ?? 587),
-    secure: isTruthy(settings.smtp_secure ?? true),
+    port,
+    secure: port === 465,
+    requireTLS: isTruthy(settings.smtp_secure ?? true) && port !== 465,
     auth: {
       user: username,
       pass: password,
@@ -185,6 +187,7 @@ async function sendWithBrevo(settings: Record<string, any>, to: string, subject:
 }
 
 export async function POST(request: Request) {
+  let configuredProvider = "server_error";
   try {
     const body = (await request.json()) as {
       to?: string;
@@ -204,6 +207,7 @@ export async function POST(request: Request) {
 
     const settings = await getEmailSettings();
     const providerName = String(settings.email_provider || "system_mailto").toLowerCase();
+    configuredProvider = providerName;
 
     if (!providerName || providerName === "none" || providerName === "system_mailto") {
       return NextResponse.json({
@@ -236,10 +240,10 @@ export async function POST(request: Request) {
       default:
         return NextResponse.json({
           success: false,
-          fallback: true,
-          mode: "mailto",
+          fallback: false,
+          mode: "direct",
           code: "UNSUPPORTED_PROVIDER",
-          message: "This email provider is not supported, so the system is falling back to your email app.",
+          message: `Unsupported email provider: ${providerName}. Choose SMTP or a supported provider in Settings.`,
         }, { status: 400 });
     }
 
@@ -250,6 +254,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, provider: result.provider, mode: "direct" });
   } catch (error: any) {
     const message = error?.message || "Email failed to send.";
-    return NextResponse.json({ success: false, fallback: true, mode: "mailto", message }, { status: 500 });
+    const canUseMailApp = configuredProvider === "system_mailto" || configuredProvider === "none";
+    return NextResponse.json({
+      success: false,
+      fallback: canUseMailApp,
+      mode: canUseMailApp ? "mailto" : "direct",
+      message,
+    }, { status: 500 });
   }
 }

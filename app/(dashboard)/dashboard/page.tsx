@@ -13,7 +13,6 @@ import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { BreakdownSection } from "@/components/breakdown-bar";
 import { fetchLeads, fetchActivity } from "@/lib/supabase/queries";
-import { formatINR } from "@/lib/messaging";
 import { STATUSES, PRIORITIES } from "@/lib/supabase/types";
 import type { Lead, ActivityLogEntry } from "@/lib/supabase/types";
 import { useToast } from "@/components/toast-provider";
@@ -43,13 +42,6 @@ export default function DashboardPage() {
     const emailSentTotal = activity.filter((a) => a.action === "email_sent").length;
     const conversionRate = totalLeads ? ((convertedCount / totalLeads) * 100).toFixed(1) : "0.0";
     const responseRate = totalLeads ? ((contactedCount / totalLeads) * 100).toFixed(1) : "0.0";
-    const pipelineValue = leads
-      .filter((l) => l.status !== "Converted" && l.status !== "Client Denied")
-      .reduce((sum, l) => sum + (Number(l.deal_value) || 0), 0);
-    const wonValue = leads
-      .filter((l) => l.status === "Converted")
-      .reduce((sum, l) => sum + (Number(l.deal_value) || 0), 0);
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const dueTodayCount = leads.filter(
@@ -65,8 +57,6 @@ export default function DashboardPage() {
       emailSentTotal,
       conversionRate,
       responseRate,
-      pipelineValue,
-      wonValue,
       dueTodayCount,
     };
   }, [leads, activity]);
@@ -126,7 +116,7 @@ export default function DashboardPage() {
       {
         label: "Hot pipeline",
         value: hotPipeline.length,
-        meta: `${formatINR(hotPipeline.reduce((sum, lead) => sum + (Number(lead.deal_value) || 0), 0))} in focus`,
+        meta: "High-priority opportunities",
         tone: "amber",
       },
       {
@@ -173,32 +163,58 @@ export default function DashboardPage() {
     <div className="space-y-5">
       <PageHeader
         title="Dashboard"
-        subtitle="A focused admin snapshot of lead flow, revenue, and the work that needs attention today."
+        subtitle="A clean view of pipeline health, priority work, and the actions that need attention today."
       />
 
-      <div className="grid gap-4 xl:grid-cols-[1.6fr_0.9fr]">
+      <div className="glass-surface rounded-xl p-3.5">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-ink-dim">Executive overview</p>
+            <h2 className="mt-1 font-display text-xl font-bold text-ink">Sales performance at a glance</h2>
+          </div>
+          <div className="glass-tile inline-flex items-center gap-2 rounded-full px-2.5 py-1.5 text-[10px] font-medium text-ink-dim">
+            <span className="h-2 w-2 rounded-full bg-success" />
+            {stats.dueTodayCount} actions due today
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard value={stats.totalLeads} label="Total Leads" accent />
+          <StatCard value={`${stats.conversionRate}%`} label="Conversion Rate" />
+          <StatCard value={stats.contactedCount} label="Contacted Leads" />
+          <StatCard value={stats.dueTodayCount} label="Due Today" />
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
-            <StatCard value={stats.totalLeads} label="Total Leads" accent />
-            <StatCard value={formatINR(stats.pipelineValue)} label="Open Pipeline" accent />
-            <StatCard value={formatINR(stats.wonValue)} label="Won Value" />
-            <StatCard value={stats.dueTodayCount} label="Due Today" />
-            <StatCard value={stats.contactedCount} label="Contacted" />
-            <StatCard value={stats.convertedCount} label="Converted" />
-            <StatCard value={`${stats.responseRate}%`} label="Contact Rate" />
-            <StatCard value={`${stats.conversionRate}%`} label="Conversion Rate" />
+          <div className="grid gap-3 md:grid-cols-2">
+            <BreakdownSection title="Leads by Status" rows={statusRows} />
+            <BreakdownSection title="Leads by Priority" rows={priorityRows} />
           </div>
 
-          <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
-            {adminPriorityCards.map((card) => (
-              <div
-                key={card.label}
-                className="soft-card rounded-xl p-3.5"
-              >
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[9.5px] uppercase tracking-[0.18em] text-ink-dim">{card.label}</span>
-                  <span
-                    className={`h-2 w-2 rounded-full ${
+          <div className="grid gap-3 md:grid-cols-2">
+            <BreakdownSection title="Leads by City" rows={cityRows} />
+            <BreakdownSection title="Leads by Source" rows={sourceRows} />
+          </div>
+
+          {lostReasonRows.length > 0 && (
+            <BreakdownSection title="Why deals were lost" rows={lostReasonRows} />
+          )}
+        </div>
+
+        <aside className="space-y-4">
+          <div className="glass-surface rounded-xl p-3.5">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-display text-sm font-bold text-ink">Daily focus</h3>
+              <Goal className="h-4 w-4 text-amber" />
+            </div>
+            <div className="space-y-2.5">
+              {adminPriorityCards.map((card) => (
+                <div key={card.label} className="glass-tile rounded-lg px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{card.label}</span>
+                    <span className={`h-2.5 w-2.5 rounded-full ${
                       card.tone === "amber"
                         ? "bg-amber"
                         : card.tone === "cyan"
@@ -206,68 +222,29 @@ export default function DashboardPage() {
                           : card.tone === "danger"
                             ? "bg-danger"
                             : "bg-success"
-                    }`}
-                  />
+                    }`} />
+                  </div>
+                  <div className="mt-1.5 text-lg font-bold text-ink">{card.value}</div>
+                  <div className="mt-0.5 text-[10.5px] text-ink-dim">{card.meta}</div>
                 </div>
-                <div className="font-display text-xl font-bold text-ink">{card.value}</div>
-                <div className="mt-1.5 text-[10.5px] text-ink-dim">{card.meta}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <BreakdownSection title="Leads by Status" rows={statusRows} />
-            <BreakdownSection title="Leads by Priority" rows={priorityRows} />
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <BreakdownSection title="Leads by City" rows={cityRows} />
-            <BreakdownSection title="Leads by Source" rows={sourceRows} />
-          </div>
-
-          {lostReasonRows.length > 0 && (
-            <div className="rounded-xl border border-border bg-panel/80 p-3.5 shadow-sm">
-              <BreakdownSection title="Why Deals Were Lost" rows={lostReasonRows} />
-            </div>
-          )}
-        </div>
-
-        <aside className="space-y-4">
-          <div className="soft-card rounded-xl p-3.5">
-            <div className="mb-2.5 flex items-center justify-between">
-              <h3 className="font-display text-sm font-bold text-ink">Admin priorities</h3>
-              <Goal className="h-4 w-4 text-amber" />
-            </div>
-            <div className="space-y-2.5">
-              <a href="/leads" className="flex items-center justify-between rounded-lg border border-border bg-row/80 px-2.5 py-2 text-sm text-ink transition-colors hover:border-amber/70 hover:bg-amber/5">
-                <span className="flex items-center gap-2"><BriefcaseBusiness size={14} className="text-cyan" /> Review active leads</span>
-                <ArrowRight size={14} />
-              </a>
-              <a href="/followups" className="flex items-center justify-between rounded-lg border border-border bg-row/80 px-2.5 py-2 text-sm text-ink transition-colors hover:border-amber/70 hover:bg-amber/5">
-                <span className="flex items-center gap-2"><CalendarClock size={14} className="text-amber" /> Follow-up queue</span>
-                <ArrowRight size={14} />
-              </a>
-              <a href="/settings" className="flex items-center justify-between rounded-lg border border-border bg-row/80 px-2.5 py-2 text-sm text-ink transition-colors hover:border-amber/70 hover:bg-amber/5">
-                <span className="flex items-center gap-2"><TrendingUp size={14} className="text-success" /> Sales settings</span>
-                <ArrowRight size={14} />
-              </a>
+              ))}
             </div>
           </div>
 
-          <div className="soft-card rounded-xl p-3.5">
-            <div className="mb-2.5 flex items-center justify-between">
+          <div className="glass-surface rounded-xl p-3.5">
+            <div className="mb-3 flex items-center justify-between">
               <h3 className="font-display text-sm font-bold text-ink">Urgent follow-ups</h3>
               <CircleAlert className="h-4 w-4 text-danger" />
             </div>
             {followUpQueue.length === 0 ? (
               <p className="text-xs text-ink-dim">No follow-ups overdue right now.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {followUpQueue.map((lead) => (
-                  <div key={lead.id} className="rounded-lg border border-border bg-row px-2.5 py-2">
+                  <div key={lead.id} className="glass-tile rounded-lg px-3 py-2.5">
                     <div className="flex items-center justify-between gap-3">
                       <div className="truncate text-sm font-medium text-ink">{lead.name}</div>
-                      <span className="rounded-full bg-danger/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-danger">
+                      <span className="rounded-full bg-danger/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-danger">
                         {lead.priority}
                       </span>
                     </div>
@@ -280,20 +257,18 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-panel p-3.5">
-            <h3 className="mb-2.5 font-display text-sm font-bold text-ink">Recent activity</h3>
+          <div className="glass-surface rounded-xl p-3.5">
+            <h3 className="mb-3 font-display text-sm font-bold text-ink">Recent activity</h3>
             {recentActivity.length === 0 ? (
               <p className="text-xs text-ink-dim">No activity logged yet.</p>
             ) : (
-              <div className="space-y-2">
-                {recentActivity.slice(0, 6).map((a) => (
-                  <div key={a.id} className="rounded-lg border border-border bg-row px-2.5 py-2">
+              <div className="space-y-2.5">
+                {recentActivity.slice(0, 5).map((a) => (
+                  <div key={a.id} className="glass-tile rounded-lg px-3 py-2.5">
                     <div className="font-mono text-[9.5px] uppercase tracking-wide text-ink-dim">
                       {new Date(a.created_at).toLocaleString()}
                     </div>
-                    <div className="mt-1 text-sm text-ink">
-                      <span className="font-medium">{a.leadName}</span>
-                    </div>
+                    <div className="mt-1 text-sm text-ink">{a.leadName}</div>
                     <div className="text-[10.5px] text-ink-dim">
                       {a.action}
                       {a.detail ? ` · ${a.detail}` : ""}

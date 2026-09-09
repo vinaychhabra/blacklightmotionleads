@@ -8,7 +8,7 @@ export function StatCard({
   accent?: boolean;
 }) {
   return (
-    <div className="panel-surface rounded-xl p-3.5">
+    <div className="glass-tile rounded-lg p-3.5">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-[9.5px] font-semibold uppercase tracking-[0.18em] text-ink-dim">{label}</span>
         <span className={`h-2 w-2 rounded-full ${accent ? "bg-gradient-to-r from-amber to-cyan" : "bg-slate-300 dark:bg-slate-600"}`} />

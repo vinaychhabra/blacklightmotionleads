@@ -18,6 +18,7 @@ export function NotificationPanel() {
   const [newLeadsToday, setNewLeadsToday] = useState(0);
   const [missingContacts, setMissingContacts] = useState(0);
   const [settings, setSettings] = useState<any>(null);
+  const [smtpError, setSmtpError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
@@ -54,6 +55,13 @@ export function NotificationPanel() {
       try {
         const result = await fetchSettings();
         setSettings(result);
+        if (result.email_provider === "smtp") {
+          const verification = await fetch("/api/email/verify", { method: "POST" });
+          const verificationResult = await verification.json();
+          if (!verification.ok || !verificationResult.ok) {
+            setSmtpError(verificationResult.message || "Saved SMTP settings could not be verified.");
+          }
+        }
       } catch {
         setSettings(null);
       }
@@ -96,6 +104,14 @@ export function NotificationPanel() {
         tone: "danger",
       });
     } else {
+      if (smtpError) {
+        list.push({
+          title: "SMTP configuration failed",
+          detail: smtpError,
+          tone: "danger",
+        });
+      }
+
       if (!settings.ai_provider || settings.ai_provider === "none") {
         list.push({
           title: "AI integration pending",
@@ -130,7 +146,7 @@ export function NotificationPanel() {
     }
 
     return list.slice(0, 4);
-  }, [dueCount, newLeadsToday, missingContacts, settings]);
+  }, [dueCount, newLeadsToday, missingContacts, settings, smtpError]);
 
   const toneClasses: Record<Tone, string> = {
     warning: "border-amber/30 bg-amber/5 text-amber-700 dark:text-amber-300",

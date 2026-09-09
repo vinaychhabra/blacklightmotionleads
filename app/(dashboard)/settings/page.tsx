@@ -96,6 +96,26 @@ export default function SettingsPage() {
   async function handleSaveIntegrations() {
     if (!settings) return;
     try {
+      if (emailProvider === "smtp") {
+        const verification = await fetch("/api/email/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            settings: {
+              smtp_host: smtpHost,
+              smtp_port: Number(smtpPort) || 587,
+              smtp_username: smtpUsername,
+              smtp_password: smtpPassword,
+              smtp_secure: smtpSecure,
+            },
+          }),
+        });
+        const result = await verification.json();
+        if (!verification.ok || !result.ok) {
+          throw new Error(`SMTP verification failed: ${result.message || "Check your host, port, username, and password."}`);
+        }
+      }
+
       const updated = await updateSettings({
         lead_provider: leadProvider,
         google_places_api_key: googlePlacesApiKey,
@@ -148,7 +168,6 @@ export default function SettingsPage() {
 
   const columnToggles: { key: keyof ColumnPrefs; label: string; description: string }[] = [
     { key: "showEmail", label: "Email column", description: "Show each lead's email address in the table." },
-    { key: "showDealValue", label: "Deal value badge", description: "Show the ₹ expected value badge next to each lead." },
     { key: "showFollowUp", label: "Follow-up badge", description: "Show due/overdue/upcoming badges in the leads table." },
     { key: "showSendCounts", label: "Sent column", description: "Show the WhatsApp/email send-count column." },
   ];

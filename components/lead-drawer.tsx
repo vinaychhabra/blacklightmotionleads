@@ -49,7 +49,6 @@ export function LeadDrawer({
       status: "New",
       notes: null,
       priority: "Warm",
-      deal_value: null,
       follow_up_date: null,
       lost_reason: null,
       created_at: new Date().toISOString(),
@@ -74,13 +73,16 @@ export function LeadDrawer({
   async function patch(fields: Partial<Lead>) {
     if (isDraft && !existingLead) {
       const sanitized = {
-        ...currentLead,
-        ...fields,
         name: (fields.name ?? currentLead.name ?? "").trim() || (currentLead.name ?? "").trim() || "",
         phone: (fields.phone ?? currentLead.phone ?? "").trim() || (currentLead.phone ?? "").trim() || null,
         email: (fields.email ?? currentLead.email ?? "").trim() || (currentLead.email ?? "").trim() || null,
         city: (fields.city ?? currentLead.city ?? "").trim() || (currentLead.city ?? "").trim() || null,
         source: (fields.source ?? currentLead.source ?? "").trim() || (currentLead.source ?? "").trim() || null,
+        status: fields.status ?? currentLead.status,
+        notes: fields.notes ?? currentLead.notes,
+        priority: fields.priority ?? currentLead.priority,
+        follow_up_date: fields.follow_up_date ?? currentLead.follow_up_date,
+        lost_reason: fields.lost_reason ?? currentLead.lost_reason,
       };
 
       const hasMeaningfulData = Boolean(
@@ -159,6 +161,7 @@ export function LeadDrawer({
     const msg = fillTemplate(currentTemplate.body, currentLead.name);
     const subj = fillTemplate(currentTemplate.subject || "Hi from Blacklight Motion", currentLead.name);
 
+    let shouldUseMailApp = false;
     try {
       const response = await fetch("/api/email/send", {
         method: "POST",
@@ -172,6 +175,7 @@ export function LeadDrawer({
       const result = await response.json();
 
       if (!response.ok && result?.fallback) {
+        shouldUseMailApp = true;
         window.open(mailtoLink(currentLead.email, subj, msg), "_self");
       } else if (!response.ok) {
         throw new Error(result?.message || "Email send failed");
@@ -181,7 +185,7 @@ export function LeadDrawer({
       if (currentLead.status === "New") patch({ status: "Contacted" });
     } catch (err: any) {
       showToast(err.message || "Couldn't send email", "error");
-      window.open(mailtoLink(currentLead.email, subj, msg), "_self");
+      if (shouldUseMailApp) window.open(mailtoLink(currentLead.email, subj, msg), "_self");
     }
   }
 
@@ -263,25 +267,15 @@ export function LeadDrawer({
               </select>
             </Field>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Priority">
-                <select
-                  value={lead.priority}
-                  onChange={(e) => patch({ priority: e.target.value as Priority })}
-                  className="input"
-                >
-                  {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </Field>
-              <Field label="Deal value (₹)">
-                <input
-                  type="number"
-                  defaultValue={lead.deal_value ?? ""}
-                  onBlur={(e) => patch({ deal_value: e.target.value ? Number(e.target.value) : 0 })}
-                  className="input"
-                />
-              </Field>
-            </div>
+            <Field label="Priority">
+              <select
+                value={lead.priority}
+                onChange={(e) => patch({ priority: e.target.value as Priority })}
+                className="input"
+              >
+                {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </Field>
 
             <Field label="Follow-up date">
               <input

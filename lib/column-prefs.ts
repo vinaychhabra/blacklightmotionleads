@@ -4,14 +4,12 @@ import { useEffect, useState } from "react";
 
 export interface ColumnPrefs {
   showEmail: boolean;
-  showDealValue: boolean;
   showFollowUp: boolean;
   showSendCounts: boolean;
 }
 
 const DEFAULT_PREFS: ColumnPrefs = {
   showEmail: true,
-  showDealValue: true,
   showFollowUp: true,
   showSendCounts: true,
 };

@@ -38,7 +38,6 @@ export interface Lead {
   status: LeadStatus;
   notes: string | null;
   priority: Priority;
-  deal_value: number | null;
   follow_up_date: string | null; // ISO date, e.g. "2026-09-01"
   lost_reason: string | null;
   created_at: string;

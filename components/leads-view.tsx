@@ -24,7 +24,7 @@ import {
   updateLead,
   logActivity,
 } from "@/lib/supabase/queries";
-import { formatINR, fillTemplate, waLink, mailtoLink } from "@/lib/messaging";
+import { fillTemplate, waLink, mailtoLink } from "@/lib/messaging";
 import { StatusBadge } from "@/components/status-badge";
 import { PriorityDot } from "@/components/priority-dot";
 import { FollowUpBadge } from "@/components/followup-badge";
@@ -216,6 +216,7 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
     const msg = fillTemplate(currentTemplate.body, lead.name);
     const subj = fillTemplate(currentTemplate.subject || "Hi from Blacklight Motion", lead.name);
 
+    let shouldUseMailApp = false;
     try {
       const response = await fetch("/api/email/send", {
         method: "POST",
@@ -229,6 +230,7 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
       const result = await response.json();
 
       if (!response.ok && result?.fallback) {
+        shouldUseMailApp = true;
         window.open(mailtoLink(lead.email, subj, msg), "_self");
       } else if (!response.ok) {
         throw new Error(result?.message || "Email send failed");
@@ -241,20 +243,20 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
         setLeads((prev) => prev.map((l) => (l.id === lead.id ? updated : l)));
       }
 
-      if (!response.ok) {
-        showToast("Email was queued but not sent automatically", "default");
+      if (shouldUseMailApp) {
+        showToast("Opened your email app", "default");
       }
     } catch (err: any) {
       showToast(err.message || "Couldn't send email", "error");
-      window.open(mailtoLink(lead.email, subj, msg), "_self");
+      if (shouldUseMailApp) window.open(mailtoLink(lead.email, subj, msg), "_self");
     }
   }
 
   function handleExportCsv() {
-    const header = "Name,City,Phone,Email,Source,Status,Priority,Deal Value,Follow Up Date\n";
+    const header = "Name,City,Phone,Email,Source,Status,Priority,Follow Up Date\n";
     const rows = leads
       .map((l) =>
-        [l.name, l.city, l.phone, l.email, l.source, l.status, l.priority, l.deal_value, l.follow_up_date]
+        [l.name, l.city, l.phone, l.email, l.source, l.status, l.priority, l.follow_up_date]
           .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
           .join(",")
       )
@@ -379,7 +381,7 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
     <div>
       {/* Status filter chips */}
       {!dueOnly && (
-        <div className="mb-3 flex flex-wrap gap-1.5">
+        <div className="mb-3 flex w-full gap-0.5 overflow-x-auto rounded-xl border border-border bg-panel p-1 shadow-sm scrollbar-thin">
           {(["all", ...STATUSES] as const).map((s) => {
             const count = s === "all" ? leads.length : leads.filter((l) => l.status === s).length;
             const active = statusFilter === s;
@@ -387,14 +389,14 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
               <button
                 key={s}
                 onClick={() => { setStatusFilter(s as any); resetPage(); }}
-                className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                className={`flex min-w-[92px] flex-1 shrink-0 items-center justify-center gap-1.5 rounded-lg border-b-2 px-2.5 py-1.5 text-[10.5px] font-semibold transition-colors ${
                   active
-                    ? "border-transparent bg-gradient-to-r from-amber to-cyan text-black"
-                    : "border-border bg-panel text-ink-dim hover:text-ink"
+                    ? "border-amber text-ink"
+                    : "border-transparent text-ink-dim hover:border-border hover:text-ink"
                 }`}
               >
-                {s === "all" ? "All" : s}
-                <span className={`font-mono text-[9.5px] ${active ? "text-black/70" : "text-ink-dim"}`}>{count}</span>
+                {s === "all" ? "All leads" : s}
+                <span className={`font-mono text-[9.5px] ${active ? "text-amber" : "text-ink-dim"}`}>{count}</span>
               </button>
             );
           })}
@@ -402,8 +404,9 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
       )}
 
       {/* Toolbar */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative">
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-panel px-2 py-2 shadow-sm">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5">
+          <div className="relative w-full sm:w-1/2 sm:shrink-0">
           <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-dim" />
           <input
             type="text"
@@ -412,35 +415,35 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
               setSearch(e.target.value);
               resetPage();
             }}
-            placeholder="Search name, phone, email, city"
-            className="rounded-lg border border-border bg-panel py-1.5 pl-8 pr-3 text-xs text-ink outline-none focus:border-amber"
+            placeholder="Search leads"
+            className="w-full rounded-lg border border-border bg-panel py-1.5 pl-8 pr-3 text-xs text-ink outline-none focus:border-amber"
           />
+          </div>
+
+          <select
+            value={cityFilter}
+            onChange={(e) => { setCityFilter(e.target.value); resetPage(); }}
+            className="min-w-[140px] flex-1 rounded-lg border border-border bg-panel px-2.5 py-1.5 text-xs text-ink outline-none focus:border-amber"
+          >
+            <option value="all">All cities</option>
+            {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+
+          <select
+            value={sourceFilter}
+            onChange={(e) => { setSourceFilter(e.target.value); resetPage(); }}
+            className="min-w-[140px] flex-1 rounded-lg border border-border bg-panel px-2.5 py-1.5 text-xs text-ink outline-none focus:border-amber"
+          >
+            <option value="all">All sources</option>
+            {sources.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
-
-        <select
-          value={cityFilter}
-          onChange={(e) => { setCityFilter(e.target.value); resetPage(); }}
-          className="rounded-lg border border-border bg-panel px-2.5 py-1.5 text-xs text-ink outline-none"
-        >
-          <option value="all">All cities</option>
-          {cities.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-
-        <select
-          value={sourceFilter}
-          onChange={(e) => { setSourceFilter(e.target.value); resetPage(); }}
-          className="rounded-lg border border-border bg-panel px-2.5 py-1.5 text-xs text-ink outline-none"
-        >
-          <option value="all">All sources</option>
-          {sources.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-end gap-1.5 border-t border-border pt-2">
           {templates.length > 0 && (
             <select
               value={templateId ?? ""}
               onChange={(e) => setTemplateId(e.target.value)}
-              className="rounded-lg border border-border bg-panel px-2.5 py-1.5 text-xs text-ink outline-none"
+              className="max-w-[150px] rounded-lg border border-border bg-panel px-2.5 py-1.5 text-xs text-ink outline-none focus:border-amber"
             >
               {templates.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
@@ -478,11 +481,11 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
       )}
 
       {/* Table */}
-      <div className="overflow-hidden rounded-xl border border-border bg-panel">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-xl border border-border bg-panel shadow-sm">
+        <table className="min-w-[760px] w-full table-fixed text-sm">
           <thead>
-            <tr className="border-b border-border bg-row text-left text-[10.5px] uppercase tracking-wide text-ink-dim">
-              <th className="w-9 px-4 py-3">
+            <tr className="border-b border-border bg-row/80 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-dim">
+              <th className="w-9 px-4 py-2.5">
                 <input
                   type="checkbox"
                   checked={filtered.length > 0 && filtered.every((l) => selectedIds.has(l.id))}
@@ -490,12 +493,12 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
                   className="accent-amber"
                 />
               </th>
-              <th className="px-2 py-3">Lead</th>
-              <th className="px-2 py-3">Phone</th>
-              {prefs.showEmail && <th className="px-2 py-3">Email</th>}
-              <th className="px-2 py-3">Status</th>
-              <th className="px-2 py-3 text-center">Actions</th>
-              {prefs.showSendCounts && <th className="px-2 py-3 text-right">Sent</th>}
+              <th className="w-[27%] px-3 py-2.5">Lead</th>
+              <th className="w-[17%] px-3 py-2.5">Phone</th>
+              {prefs.showEmail && <th className="w-[22%] px-3 py-2.5">Email</th>}
+              <th className="w-[14%] px-3 py-2.5">Status</th>
+              <th className="w-[12%] px-3 py-2.5 text-center">Reach</th>
+              {prefs.showSendCounts && <th className="w-[10%] px-3 py-2.5 text-right">Sent</th>}
             </tr>
           </thead>
           <tbody>
@@ -514,9 +517,9 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
                 <tr
                   key={lead.id}
                   onClick={() => setOpenLeadId(lead.id)}
-                  className="cursor-pointer border-b border-border last:border-0 hover:bg-row"
+                  className="cursor-pointer border-b border-border/70 even:bg-row/35 last:border-0 hover:bg-row"
                 >
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                  <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedIds.has(lead.id)}
@@ -524,33 +527,30 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
                       className="accent-amber"
                     />
                   </td>
-                  <td className="px-2 py-3">
+                  <td className="px-3 py-3">
                     <div className="flex items-center gap-2">
                       <PriorityDot priority={lead.priority} />
-                      <span className="font-medium text-ink">{lead.name || "(unnamed)"}</span>
+                      <span className="truncate font-semibold text-ink">{lead.name || "(unnamed)"}</span>
+                      <span className="shrink-0 text-[9px] font-medium uppercase tracking-wide text-ink-dim">{lead.priority}</span>
                     </div>
-                    <div className="mt-0.5 flex items-center gap-1.5 text-[10.5px] text-ink-dim">
-                      <span>{lead.city}{lead.source ? ` · ${lead.source}` : ""}</span>
-                      {prefs.showDealValue && lead.deal_value ? (
-                        <span className="rounded bg-cyan/10 px-1.5 py-0.5 font-mono text-cyan">
-                          {formatINR(lead.deal_value)}
-                        </span>
-                      ) : null}
+                    <div className="mt-1 flex min-w-0 items-center gap-2 text-[10.5px] text-ink-dim">
+                      <span className="truncate">{lead.city || "No city"}</span>
+                      {lead.source && <span className="truncate text-ink-dim/70">· {lead.source}</span>}
                       {prefs.showFollowUp && <FollowUpBadge dateStr={lead.follow_up_date} />}
                     </div>
                   </td>
-                  <td className="px-2 py-3 font-mono text-xs text-ink-dim">{lead.phone || "—"}</td>
+                  <td className="px-3 py-3 font-mono text-xs text-ink-dim">{lead.phone || "—"}</td>
                   {prefs.showEmail && (
-                    <td className="px-2 py-3 text-xs text-ink-dim">{lead.email || "—"}</td>
+                    <td className="truncate px-3 py-3 text-xs text-ink-dim">{lead.email || "—"}</td>
                   )}
-                  <td className="px-2 py-3"><StatusBadge status={lead.status} /></td>
-                  <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                  <td className="px-3 py-3"><StatusBadge status={lead.status} /></td>
+                  <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-center gap-1.5">
                       <button
                         onClick={(e) => quickSendWhatsApp(lead, e)}
                         disabled={!lead.phone}
                         title={lead.phone ? "Send WhatsApp" : "No phone number"}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-success/15 text-success hover:bg-success/25 disabled:cursor-not-allowed disabled:opacity-30"
+                        className="flex h-7 w-7 items-center justify-center rounded-md bg-success/15 text-success hover:bg-success/25 disabled:cursor-not-allowed disabled:opacity-30"
                       >
                         <MessageCircle size={14} />
                       </button>
@@ -558,16 +558,16 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
                         onClick={(e) => quickSendEmail(lead, e)}
                         disabled={!lead.email}
                         title={lead.email ? "Send Email" : "No email address"}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan/15 text-cyan hover:bg-cyan/25 disabled:cursor-not-allowed disabled:opacity-30"
+                        className="flex h-7 w-7 items-center justify-center rounded-md bg-cyan/15 text-cyan hover:bg-cyan/25 disabled:cursor-not-allowed disabled:opacity-30"
                       >
                         <Mail size={14} />
                       </button>
                     </div>
                   </td>
                   {prefs.showSendCounts && (
-                    <td className="px-2 py-3 text-right font-mono text-[10.5px] text-ink-dim">
-                      {counts.wa > 0 && <span className="mr-2">WA {counts.wa}</span>}
-                      {counts.email > 0 && <span>Mail {counts.email}</span>}
+                    <td className="px-3 py-3 text-right font-mono text-[10.5px] text-ink-dim">
+                      {counts.wa > 0 && <span className="mr-1.5 rounded bg-success/10 px-1.5 py-0.5 text-success">WA {counts.wa}</span>}
+                      {counts.email > 0 && <span className="rounded bg-cyan/10 px-1.5 py-0.5 text-cyan">Mail {counts.email}</span>}
                       {counts.wa === 0 && counts.email === 0 && "—"}
                     </td>
                   )}
