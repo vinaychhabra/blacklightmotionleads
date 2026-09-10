@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import type { Template } from "@/lib/supabase/types";
 import { fetchTemplates, insertTemplate, updateTemplate, deleteTemplate } from "@/lib/supabase/queries";
-import { fillTemplate } from "@/lib/messaging";
+import { appendWhatsAppExtras, emailHtml, fillTemplate } from "@/lib/messaging";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/components/toast-provider";
 import { useConfirm } from "@/components/confirm-provider";
@@ -26,8 +26,12 @@ export default function TemplatesPage() {
     try {
       const saved = await insertTemplate({
         label: "New template",
+        channel: "both",
         subject: "",
         body: "Hi {name}, ",
+        image_url: null,
+        cta_label: "Learn more",
+        cta_url: null,
       });
       setTemplates((prev) => [...prev, saved]);
     } catch (err: any) {
@@ -112,6 +116,10 @@ function TemplateCard({
   const [label, setLabel] = useState(template.label);
   const [subject, setSubject] = useState(template.subject || "");
   const [body, setBody] = useState(template.body);
+  const [channel, setChannel] = useState(template.channel || "both");
+  const [imageUrl, setImageUrl] = useState(template.image_url || "");
+  const [ctaLabel, setCtaLabel] = useState(template.cta_label || "");
+  const [ctaUrl, setCtaUrl] = useState(template.cta_url || "");
 
   const preview = fillTemplate(body, "Rohan");
 
@@ -133,17 +141,29 @@ function TemplateCard({
         </button>
       </div>
 
-      <div className="mb-3">
-        <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
-          Email subject
+      <div className="mb-3 grid gap-3 md:grid-cols-2">
+        <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+          Channel
+          <select
+            value={channel}
+            onChange={(e) => { setChannel(e.target.value); onChange({ channel: e.target.value }); }}
+            className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-xs text-ink outline-none focus:border-amber"
+          >
+            <option value="both">WhatsApp + Email</option>
+            <option value="whatsapp">WhatsApp only</option>
+            <option value="email">Email only</option>
+          </select>
         </label>
-        <input
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          onBlur={() => onChange({ subject })}
-          className="w-full rounded-lg border border-border bg-row px-3 py-2 text-xs text-ink outline-none focus:border-amber"
-          placeholder="Subject line for email sends"
-        />
+        <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+          Email subject
+          <input
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            onBlur={() => onChange({ subject })}
+            className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-xs text-ink outline-none focus:border-amber"
+            placeholder="Subject line for email sends"
+          />
+        </label>
       </div>
 
       <div className="mb-3">
@@ -159,11 +179,29 @@ function TemplateCard({
         />
       </div>
 
+      <div className="mb-3 grid gap-3 md:grid-cols-3">
+        <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+          Image URL
+          <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} onBlur={() => onChange({ image_url: imageUrl || null })} placeholder="https://..." className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-xs text-ink outline-none focus:border-amber" />
+        </label>
+        <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+          CTA label
+          <input value={ctaLabel} onChange={(e) => setCtaLabel(e.target.value)} onBlur={() => onChange({ cta_label: ctaLabel || null })} placeholder="Book a call" className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-xs text-ink outline-none focus:border-amber" />
+        </label>
+        <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+          CTA URL
+          <input value={ctaUrl} onChange={(e) => setCtaUrl(e.target.value)} onBlur={() => onChange({ cta_url: ctaUrl || null })} placeholder="https://..." className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-xs text-ink outline-none focus:border-amber" />
+        </label>
+      </div>
+
       <div className="rounded-lg border border-dashed border-border bg-row px-3 py-2.5">
         <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-ink-dim">
           Preview (as "Rohan" would see it)
         </div>
-        <p className="text-xs leading-relaxed text-ink-dim">{preview}</p>
+        {channel !== "email" && <p className="text-xs leading-relaxed text-ink-dim">{appendWhatsAppExtras(preview, imageUrl, ctaLabel, ctaUrl)}</p>}
+        {channel !== "whatsapp" && (
+          <div className="mt-2 border-t border-border pt-2 text-xs leading-relaxed text-ink-dim" dangerouslySetInnerHTML={{ __html: emailHtml(preview, imageUrl, ctaLabel, ctaUrl) }} />
+        )}
       </div>
     </div>
   );

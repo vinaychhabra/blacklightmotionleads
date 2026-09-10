@@ -5,7 +5,7 @@ import { X, MessageCircle, Mail, Trash2 } from "lucide-react";
 import type { Lead, ActivityLogEntry, Template, LeadStatus, Priority } from "@/lib/supabase/types";
 import { STATUSES, PRIORITIES } from "@/lib/supabase/types";
 import { updateLead, deleteLead, logActivity, insertLead } from "@/lib/supabase/queries";
-import { fillTemplate, waLink, mailtoLink } from "@/lib/messaging";
+import { appendWhatsAppExtras, emailHtml, fillTemplate, mailtoLink, waLink } from "@/lib/messaging";
 import { StatusBadge } from "@/components/status-badge";
 import { useToast } from "@/components/toast-provider";
 import { useConfirm } from "@/components/confirm-provider";
@@ -19,7 +19,8 @@ interface Props {
   activityByLead: Record<string, ActivityLogEntry[]>;
   setActivity: React.Dispatch<React.SetStateAction<ActivityLogEntry[]>>;
   templates: Template[];
-  templateId: string | null;
+  whatsappTemplateId: string | null;
+  emailTemplateId: string | null;
   onClose: () => void;
 }
 
@@ -30,7 +31,8 @@ export function LeadDrawer({
   activityByLead,
   setActivity,
   templates,
-  templateId,
+  whatsappTemplateId,
+  emailTemplateId,
   onClose,
 }: Props) {
   const { showToast } = useToast();
@@ -65,7 +67,10 @@ export function LeadDrawer({
     [activityByLead, leadId]
   );
 
-  const currentTemplate = templates.find((t) => t.id === templateId) || templates[0];
+  const whatsappTemplates = templates.filter((template) => template.channel !== "email");
+  const emailTemplates = templates.filter((template) => template.channel !== "whatsapp");
+  const whatsappTemplate = whatsappTemplates.find((t) => t.id === whatsappTemplateId) || whatsappTemplates[0];
+  const emailTemplate = emailTemplates.find((t) => t.id === emailTemplateId) || emailTemplates[0];
 
   if (!lead) return null;
   const currentLead = lead;
@@ -149,17 +154,18 @@ export function LeadDrawer({
   }
 
   function handleSendWhatsApp() {
-    if (!currentLead.phone || !currentTemplate) return;
-    const msg = fillTemplate(currentTemplate.body, currentLead.name);
+    if (!currentLead.phone || !whatsappTemplate) return;
+    const msg = appendWhatsAppExtras(fillTemplate(whatsappTemplate.body, currentLead.name), whatsappTemplate.image_url, whatsappTemplate.cta_label, whatsappTemplate.cta_url);
     window.open(waLink(currentLead.phone, msg), "_blank");
-    addActivity("whatsapp_sent", currentTemplate.label);
+    addActivity("whatsapp_sent", whatsappTemplate.label);
     if (currentLead.status === "New") patch({ status: "Contacted" });
   }
 
   async function handleSendEmail() {
-    if (!currentLead.email || !currentTemplate) return;
-    const msg = fillTemplate(currentTemplate.body, currentLead.name);
-    const subj = fillTemplate(currentTemplate.subject || "Hi from Blacklight Motion", currentLead.name);
+    if (!currentLead.email || !emailTemplate) return;
+    const msg = fillTemplate(emailTemplate.body, currentLead.name);
+    const html = emailHtml(msg, emailTemplate.image_url, emailTemplate.cta_label, emailTemplate.cta_url);
+    const subj = fillTemplate(emailTemplate.subject || "Hi from Blacklight Motion", currentLead.name);
 
     let shouldUseMailApp = false;
     try {
@@ -170,6 +176,7 @@ export function LeadDrawer({
           to: currentLead.email,
           subject: subj,
           text: msg,
+          html,
         }),
       });
       const result = await response.json();
@@ -181,7 +188,7 @@ export function LeadDrawer({
         throw new Error(result?.message || "Email send failed");
       }
 
-      addActivity("email_sent", currentTemplate.label);
+      addActivity("email_sent", emailTemplate.label);
       showToast("1 email sent successfully", "success");
       if (currentLead.status === "New") patch({ status: "Contacted" });
     } catch (err: any) {

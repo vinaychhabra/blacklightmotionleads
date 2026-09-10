@@ -12,6 +12,13 @@ alter table if exists public.leads
   add column if not exists follow_up_date date,
   add column if not exists lost_reason text;
 
+-- Channel-specific copy and optional image/CTA fields for templates.
+alter table if exists public.templates
+  add column if not exists channel text default 'both',
+  add column if not exists image_url text,
+  add column if not exists cta_label text,
+  add column if not exists cta_url text;
+
 -- Single-row settings table
 create table if not exists app_settings (
   id int primary key default 1,

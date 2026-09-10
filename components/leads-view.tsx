@@ -24,7 +24,7 @@ import {
   updateLead,
   logActivity,
 } from "@/lib/supabase/queries";
-import { fillTemplate, waLink, mailtoLink } from "@/lib/messaging";
+import { appendWhatsAppExtras, emailHtml, fillTemplate, mailtoLink, waLink } from "@/lib/messaging";
 import { StatusBadge } from "@/components/status-badge";
 import { PriorityDot } from "@/components/priority-dot";
 import { FollowUpBadge } from "@/components/followup-badge";
@@ -53,7 +53,8 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
-  const [templateId, setTemplateId] = useState<string | null>(null);
+  const [whatsappTemplateId, setWhatsappTemplateId] = useState<string | null>(null);
+  const [emailTemplateId, setEmailTemplateId] = useState<string | null>(null);
 
   useEffect(() => {
     loadAll();
@@ -66,7 +67,10 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
       setLeads(l);
       setActivity(a);
       setTemplates(t);
-      if (t.length) setTemplateId(t[0].id);
+      if (t.length) {
+        setWhatsappTemplateId(t.find((template) => template.channel !== "email")?.id ?? t[0].id);
+        setEmailTemplateId(t.find((template) => template.channel !== "whatsapp")?.id ?? t[0].id);
+      }
     } catch (err: any) {
       showToast(err.message || "Failed to load data", "error");
     } finally {
@@ -191,15 +195,18 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
     setOpenLeadId("__new__");
   }
 
-  const currentTemplate = templates.find((t) => t.id === templateId) || templates[0];
+  const whatsappTemplates = templates.filter((template) => template.channel !== "email");
+  const emailTemplates = templates.filter((template) => template.channel !== "whatsapp");
+  const whatsappTemplate = whatsappTemplates.find((t) => t.id === whatsappTemplateId) || whatsappTemplates[0];
+  const emailTemplate = emailTemplates.find((t) => t.id === emailTemplateId) || emailTemplates[0];
 
   async function quickSendWhatsApp(lead: Lead, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!lead.phone || !currentTemplate) return;
-    const msg = fillTemplate(currentTemplate.body, lead.name);
+    if (!lead.phone || !whatsappTemplate) return;
+    const msg = appendWhatsAppExtras(fillTemplate(whatsappTemplate.body, lead.name), whatsappTemplate.image_url, whatsappTemplate.cta_label, whatsappTemplate.cta_url);
     window.open(waLink(lead.phone, msg), "_blank");
     try {
-      const entry = await logActivity(lead.id, "whatsapp_sent", currentTemplate.label);
+      const entry = await logActivity(lead.id, "whatsapp_sent", whatsappTemplate.label);
       setActivity((prev) => [entry, ...prev]);
       if (lead.status === "New") {
         const updated = await updateLead(lead.id, { status: "Contacted" });
@@ -212,9 +219,10 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
 
   async function quickSendEmail(lead: Lead, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!lead.email || !currentTemplate) return;
-    const msg = fillTemplate(currentTemplate.body, lead.name);
-    const subj = fillTemplate(currentTemplate.subject || "Hi from Blacklight Motion", lead.name);
+    if (!lead.email || !emailTemplate) return;
+    const msg = fillTemplate(emailTemplate.body, lead.name);
+    const html = emailHtml(msg, emailTemplate.image_url, emailTemplate.cta_label, emailTemplate.cta_url);
+    const subj = fillTemplate(emailTemplate.subject || "Hi from Blacklight Motion", lead.name);
 
     let shouldUseMailApp = false;
     try {
@@ -225,6 +233,7 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
           to: lead.email,
           subject: subj,
           text: msg,
+          html,
         }),
       });
       const result = await response.json();
@@ -236,7 +245,7 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
         throw new Error(result?.message || "Email send failed");
       }
 
-      const entry = await logActivity(lead.id, "email_sent", currentTemplate.label);
+      const entry = await logActivity(lead.id, "email_sent", emailTemplate.label);
       setActivity((prev) => [entry, ...prev]);
       showToast("1 email sent successfully", "success");
       if (lead.status === "New") {
@@ -440,14 +449,29 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
           </select>
         </div>
         <div className="flex w-full flex-wrap items-center justify-end gap-1.5 border-t border-border pt-2">
-          {templates.length > 0 && (
-            <select
-              value={templateId ?? ""}
-              onChange={(e) => setTemplateId(e.target.value)}
-              className="max-w-[150px] rounded-lg border border-border bg-panel px-2.5 py-1.5 text-xs text-ink outline-none focus:border-amber"
-            >
-              {templates.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-            </select>
+          {whatsappTemplates.length > 0 && (
+            <label className="flex items-center gap-1 text-[10px] font-medium text-ink-dim">
+              WA
+              <select
+                value={whatsappTemplateId ?? ""}
+                onChange={(e) => setWhatsappTemplateId(e.target.value)}
+                className="max-w-[150px] rounded-lg border border-border bg-panel px-2.5 py-1.5 text-xs text-ink outline-none focus:border-amber"
+              >
+                {whatsappTemplates.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
+            </label>
+          )}
+          {emailTemplates.length > 0 && (
+            <label className="flex items-center gap-1 text-[10px] font-medium text-ink-dim">
+              Email
+              <select
+                value={emailTemplateId ?? ""}
+                onChange={(e) => setEmailTemplateId(e.target.value)}
+                className="max-w-[150px] rounded-lg border border-border bg-panel px-2.5 py-1.5 text-xs text-ink outline-none focus:border-amber"
+              >
+                {emailTemplates.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
+            </label>
           )}
           <button
             onClick={handleAddLead}
@@ -613,7 +637,8 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
           activityByLead={activityByLead}
           setActivity={setActivity}
           templates={templates}
-          templateId={templateId}
+          whatsappTemplateId={whatsappTemplateId}
+          emailTemplateId={emailTemplateId}
           onClose={() => setOpenLeadId(null)}
         />
       )}
