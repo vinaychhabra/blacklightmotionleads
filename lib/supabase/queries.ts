@@ -1,5 +1,5 @@
 import { supabase } from "./client";
-import type { Lead, ActivityLogEntry, EmailTracking, Template, AppSettings } from "./types";
+import type { Lead, ActivityLogEntry, EmailTracking, Template, AppSettings, WhatsAppMessage } from "./types";
 
 export interface ScrapedLeadRecord {
   id?: string;
@@ -142,6 +142,18 @@ export async function fetchEmailTracking(): Promise<EmailTracking[]> {
   const { data, error } = await supabase.from("email_tracking").select("*").order("sent_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as EmailTracking[];
+}
+
+export async function fetchWhatsAppMessages(): Promise<WhatsAppMessage[]> {
+  const { data, error } = await supabase.from("whatsapp_messages").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as WhatsAppMessage[];
+}
+
+export async function insertWhatsAppMessage(fields: Partial<WhatsAppMessage>): Promise<WhatsAppMessage> {
+  const { data, error } = await supabase.from("whatsapp_messages").insert(fields).select().single();
+  if (error) throw error;
+  return data as WhatsAppMessage;
 }
 
 export async function insertTemplate(fields: Partial<Template>): Promise<Template> {

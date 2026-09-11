@@ -13,7 +13,10 @@ export async function GET(request: Request) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://bmhsjutyqplvwlkuarbr.supabase.co";
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_5SkqsKU8jNnwKF22Wf1W5A_rA7Ufckm";
     const client = createClient(url, key);
-    const { error } = await client.rpc("track_email_open", { tracking_token: token });
+    const { error } = await client.rpc("track_email_open", {
+      tracking_token: token,
+      tracking_user_agent: request.headers.get("user-agent"),
+    });
     if (error) console.error("Email open tracking failed:", error.message);
   }
 

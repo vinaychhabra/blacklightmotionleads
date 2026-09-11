@@ -14,6 +14,9 @@ import {
   PanelLeftOpen,
   Sparkles,
   ClipboardList,
+  MessageCircle,
+  Mail,
+  ChevronDown,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { supabase } from "@/lib/supabase/client";
@@ -25,7 +28,6 @@ const navItems = [
   { href: "/lead-generator", label: "AI Lead Generator", icon: Sparkles },
   { href: "/followups", label: "Follow-ups", icon: Clock },
   { href: "/templates", label: "Templates", icon: MessageSquareText },
-  { href: "/email-logs", label: "Email logs", icon: ClipboardList },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -36,6 +38,7 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
   const [companyName, setCompanyName] = useState("Blacklight Motion");
   const [logoUrl, setLogoUrl] = useState("/logo.png");
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(pathname.startsWith("/email-logs") || pathname.startsWith("/whatsapp-logs"));
 
   useEffect(() => {
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -132,6 +135,29 @@ export function Sidebar({ userEmail }: { userEmail?: string }) {
             </Link>
           );
         })}
+        <div>
+          <button
+            type="button"
+            onClick={() => setLogsOpen((value) => !value)}
+            title={isCollapsed ? "Logs" : undefined}
+            className={`relative flex w-full items-center rounded-lg text-sm font-medium transition-all ${isCollapsed ? "justify-center px-2 py-2" : "gap-3 px-2.5 py-2"} ${pathname.startsWith("/email-logs") || pathname.startsWith("/whatsapp-logs") ? "bg-gradient-to-r from-amber/15 via-white to-cyan/10 text-ink shadow-sm ring-1 ring-amber/20 dark:from-amber/10 dark:via-slate-800 dark:to-cyan/10" : "text-ink-dim hover:bg-row hover:text-ink"}`}
+          >
+            <ClipboardList size={16} />
+            {!isCollapsed && <><span className="flex-1 text-left">Logs</span><ChevronDown size={14} className={`transition-transform ${logsOpen ? "rotate-180" : ""}`} /></>}
+          </button>
+          {logsOpen && !isCollapsed && (
+            <div className="ml-5 mt-1 space-y-1 border-l border-border pl-2">
+              {[
+                { href: "/email-logs", label: "Email", icon: Mail },
+                { href: "/whatsapp-logs", label: "WhatsApp", icon: MessageCircle },
+              ].map(({ href, label, icon: LogIcon }) => (
+                <Link key={href} href={href} className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs ${pathname.startsWith(href) ? "bg-row font-semibold text-ink" : "text-ink-dim hover:bg-row hover:text-ink"}`}>
+                  <LogIcon size={13} /> {label}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       </nav>
 
       <div className={`space-y-3 border-t border-border py-3 ${isCollapsed ? "px-2" : "px-3"}`}>

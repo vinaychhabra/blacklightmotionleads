@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { X, MessageCircle, Mail, Trash2 } from "lucide-react";
+import { X, MessageCircle, Mail, Trash2, Loader2 } from "lucide-react";
 import type { Lead, ActivityLogEntry, Template, LeadStatus, Priority } from "@/lib/supabase/types";
 import { STATUSES, PRIORITIES } from "@/lib/supabase/types";
-import { updateLead, deleteLead, logActivity, insertLead, insertEmailTracking } from "@/lib/supabase/queries";
-import { appendWhatsAppExtras, emailHtml, fillTemplate, mailtoLink, waLink } from "@/lib/messaging";
+import { updateLead, deleteLead, logActivity, insertLead, insertEmailTracking, insertWhatsAppMessage } from "@/lib/supabase/queries";
+import { appendWhatsAppExtras, emailHtml, fillTemplate, mailtoLink } from "@/lib/messaging";
 import { StatusBadge } from "@/components/status-badge";
 import { useToast } from "@/components/toast-provider";
 import { useConfirm } from "@/components/confirm-provider";
@@ -38,6 +38,9 @@ export function LeadDrawer({
   const { showToast } = useToast();
   const confirm = useConfirm();
   const [savedLeadId, setSavedLeadId] = useState<string | null>(null);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [isSavingLead, setIsSavingLead] = useState(false);
   const existingLead = leads.find((l) => l.id === leadId);
   const isDraft = leadId === "__new__" && !savedLeadId;
   const [draftLead, setDraftLead] = useState<Lead | null>(() =>
@@ -77,39 +80,7 @@ export function LeadDrawer({
 
   async function patch(fields: Partial<Lead>) {
     if (isDraft && !existingLead) {
-      const sanitized = {
-        name: (fields.name ?? currentLead.name ?? "").trim() || (currentLead.name ?? "").trim() || "",
-        phone: (fields.phone ?? currentLead.phone ?? "").trim() || (currentLead.phone ?? "").trim() || null,
-        email: (fields.email ?? currentLead.email ?? "").trim() || (currentLead.email ?? "").trim() || null,
-        city: (fields.city ?? currentLead.city ?? "").trim() || (currentLead.city ?? "").trim() || null,
-        source: (fields.source ?? currentLead.source ?? "").trim() || (currentLead.source ?? "").trim() || null,
-        status: fields.status ?? currentLead.status,
-        notes: fields.notes ?? currentLead.notes,
-        priority: fields.priority ?? currentLead.priority,
-        follow_up_date: fields.follow_up_date ?? currentLead.follow_up_date,
-        lost_reason: fields.lost_reason ?? currentLead.lost_reason,
-      };
-
-      const hasMeaningfulData = Boolean(
-        sanitized.name || sanitized.phone || sanitized.email || sanitized.city || sanitized.source || sanitized.notes
-      );
-
-      if (!hasMeaningfulData) return;
-
-      try {
-        const created = await insertLead({
-          ...sanitized,
-          name: sanitized.name || "New Lead",
-          status: sanitized.status || "New",
-          priority: sanitized.priority || "Warm",
-          source: sanitized.source || "Manual entry",
-        });
-        setLeads((prev) => [created, ...prev]);
-        setSavedLeadId(created.id);
-        setDraftLead(created);
-      } catch (err: any) {
-        showToast(err.message || "Could not create lead", "error");
-      }
+      setDraftLead((previous) => previous ? { ...previous, ...fields } : previous);
       return;
     }
 
@@ -119,8 +90,48 @@ export function LeadDrawer({
       if (isDraft && !existingLead) {
         setDraftLead(updated);
       }
+
     } catch (err: any) {
       showToast(err.message || "Update failed", "error");
+    }
+
+  }
+
+  async function handleSubmitLead() {
+    if (!isDraft || !draftLead || isSavingLead) return;
+    const name = draftLead.name.trim();
+    const phone = draftLead.phone?.trim() || null;
+    const email = draftLead.email?.trim() || null;
+    const city = draftLead.city?.trim() || null;
+    const source = draftLead.source?.trim() || null;
+    const notes = draftLead.notes?.trim() || null;
+    if (!name && !phone && !email && !city && !source && !notes) {
+      showToast("Add at least a name, phone, email, city, source, or note before saving.", "error");
+      return;
+    }
+
+    setIsSavingLead(true);
+    try {
+      const created = await insertLead({
+        name: name || "New Lead",
+        phone,
+        email,
+        city,
+        source: source || "Manual entry",
+        notes,
+        status: draftLead.status || "New",
+        priority: draftLead.priority || "Warm",
+        follow_up_date: draftLead.follow_up_date,
+        lost_reason: draftLead.lost_reason,
+      });
+      setLeads((prev) => [created, ...prev]);
+      setSavedLeadId(created.id);
+      setDraftLead(created);
+      showToast("Lead saved successfully", "success");
+    } catch (err: any) {
+      showToast(err.message || "Could not save lead", "error");
+    } finally {
+      setIsSavingLead(false);
     }
   }
 
@@ -155,16 +166,32 @@ export function LeadDrawer({
     setPendingStatus(null);
   }
 
-  function handleSendWhatsApp() {
-    if (!currentLead.phone || !whatsappTemplate) return;
+  async function handleSendWhatsApp() {
+    if (!currentLead.phone || !whatsappTemplate || isSendingWhatsApp) return;
+    setIsSendingWhatsApp(true);
     const msg = appendWhatsAppExtras(fillTemplate(whatsappTemplate.body, currentLead.name), whatsappTemplate.image_url, whatsappTemplate.cta_label, whatsappTemplate.cta_url);
-    window.open(waLink(currentLead.phone, msg), "_blank");
-    addActivity("whatsapp_sent", whatsappTemplate.label);
-    if (currentLead.status === "New") patch({ status: "Contacted" });
+    try {
+      const response = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: currentLead.phone, text: msg, leadId: currentLead.id, templateLabel: whatsappTemplate.label }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.message || "WhatsApp send failed");
+      await addActivity("whatsapp_sent", `${whatsappTemplate.label} (${result.messageId || "queued"})`);
+      if (currentLead.status === "New") patch({ status: "Contacted" });
+    } catch (error) {
+      await addActivity("whatsapp_failed", `${whatsappTemplate.label}: ${error instanceof Error ? error.message : "WhatsApp send failed"}`);
+      await insertWhatsAppMessage({ lead_id: currentLead.id, recipient_phone: currentLead.phone, template_label: whatsappTemplate.label, body: msg, status: "failed", error_message: error instanceof Error ? error.message : "WhatsApp send failed", failed_at: new Date().toISOString() }).catch(() => undefined);
+      showToast(error instanceof Error ? error.message : "WhatsApp send failed", "error");
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
   }
 
   async function handleSendEmail() {
-    if (!currentLead.email || !emailTemplate) return;
+    if (!currentLead.email || !emailTemplate || isSendingEmail) return;
+    setIsSendingEmail(true);
     const msg = fillTemplate(emailTemplate.body, currentLead.name);
     const html = emailHtml(msg, emailTemplate.image_url, emailTemplate.cta_label, emailTemplate.cta_url);
     const subj = fillTemplate(emailTemplate.subject || "Hi from Blacklight Motion", currentLead.name);
@@ -202,6 +229,8 @@ export function LeadDrawer({
     } catch (err: any) {
       showToast(err.message || "Couldn't send email", "error");
       if (shouldUseMailApp) window.open(mailtoLink(currentLead.email, subj, msg), "_self");
+    } finally {
+      setIsSendingEmail(false);
     }
   }
 
@@ -251,25 +280,27 @@ export function LeadDrawer({
           <div className="space-y-3">
             <Field label="Name">
               <input
-                defaultValue={lead.name}
-                onBlur={(e) => patch({ name: e.target.value })}
+                value={isDraft ? lead.name : undefined}
+                defaultValue={isDraft ? undefined : lead.name}
+                onChange={isDraft ? (e) => patch({ name: e.target.value }) : undefined}
+                onBlur={!isDraft ? (e) => patch({ name: e.target.value }) : undefined}
                 className="input"
               />
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="City">
-                <input defaultValue={lead.city ?? ""} onBlur={(e) => patch({ city: e.target.value })} className="input" />
+                <input value={isDraft ? (lead.city ?? "") : undefined} defaultValue={!isDraft ? (lead.city ?? "") : undefined} onChange={isDraft ? (e) => patch({ city: e.target.value }) : undefined} onBlur={!isDraft ? (e) => patch({ city: e.target.value }) : undefined} className="input" />
               </Field>
               <Field label="Source">
-                <input defaultValue={lead.source ?? ""} onBlur={(e) => patch({ source: e.target.value })} className="input" />
+                <input value={isDraft ? (lead.source ?? "") : undefined} defaultValue={!isDraft ? (lead.source ?? "") : undefined} onChange={isDraft ? (e) => patch({ source: e.target.value }) : undefined} onBlur={!isDraft ? (e) => patch({ source: e.target.value }) : undefined} className="input" />
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Phone">
-                <input defaultValue={lead.phone ?? ""} onBlur={(e) => patch({ phone: e.target.value })} className="input" />
+                <input value={isDraft ? (lead.phone ?? "") : undefined} defaultValue={!isDraft ? (lead.phone ?? "") : undefined} onChange={isDraft ? (e) => patch({ phone: e.target.value }) : undefined} onBlur={!isDraft ? (e) => patch({ phone: e.target.value }) : undefined} className="input" />
               </Field>
               <Field label="Email">
-                <input defaultValue={lead.email ?? ""} onBlur={(e) => patch({ email: e.target.value })} className="input" />
+                <input value={isDraft ? (lead.email ?? "") : undefined} defaultValue={!isDraft ? (lead.email ?? "") : undefined} onChange={isDraft ? (e) => patch({ email: e.target.value }) : undefined} onBlur={!isDraft ? (e) => patch({ email: e.target.value }) : undefined} className="input" />
               </Field>
             </div>
 
@@ -328,21 +359,35 @@ export function LeadDrawer({
             </Field>
           </div>
 
+          {isDraft && (
+            <button
+              type="button"
+              onClick={handleSubmitLead}
+              disabled={isSavingLead}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-amber to-cyan py-2.5 text-xs font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSavingLead ? <Loader2 size={14} className="animate-spin" /> : null}
+              {isSavingLead ? "Saving lead..." : "Submit lead"}
+            </button>
+          )}
+
           {/* Send actions */}
           <div className="mt-5 flex gap-2">
             <button
               onClick={handleSendWhatsApp}
-              disabled={!lead.phone}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-success py-2 text-xs font-semibold text-black disabled:opacity-40"
+              disabled={isDraft || !lead.phone || isSendingWhatsApp}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-success py-2 text-xs font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <MessageCircle size={14} /> WhatsApp {waCount > 0 && `(${waCount})`}
+              {isSendingWhatsApp ? <Loader2 size={14} className="animate-spin" /> : <MessageCircle size={14} />}
+              {isSendingWhatsApp ? "Sending..." : "WhatsApp"} {!isSendingWhatsApp && waCount > 0 && `(${waCount})`}
             </button>
             <button
               onClick={handleSendEmail}
-              disabled={!lead.email}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-cyan py-2 text-xs font-semibold text-black disabled:opacity-40"
+              disabled={isDraft || !lead.email || isSendingEmail}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-cyan py-2 text-xs font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <Mail size={14} /> Email {emailCount > 0 && `(${emailCount})`}
+              {isSendingEmail ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+              {isSendingEmail ? "Sending..." : "Email"} {!isSendingEmail && emailCount > 0 && `(${emailCount})`}
             </button>
           </div>
 

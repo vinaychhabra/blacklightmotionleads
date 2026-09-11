@@ -63,6 +63,7 @@ export interface EmailTracking {
   opened_at: string | null;
   last_opened_at: string | null;
   open_count: number;
+  last_user_agent: string | null;
 }
 
 export interface Template {
@@ -116,5 +117,30 @@ export interface AppSettings {
   mailgun_api_key?: string | null;
   mailgun_domain?: string | null;
   brevo_api_key?: string | null;
+  whatsapp_enabled?: boolean | null;
+  whatsapp_access_token?: string | null;
+  whatsapp_phone_number_id?: string | null;
+  whatsapp_business_account_id?: string | null;
+  whatsapp_verify_token?: string | null;
+  whatsapp_api_version?: string | null;
   updated_at: string;
+}
+
+export type WhatsAppMessageStatus = "queued" | "sent" | "delivered" | "read" | "failed" | "received";
+
+export interface WhatsAppMessage {
+  id: string;
+  lead_id: string | null;
+  direction: "outbound" | "inbound";
+  recipient_phone: string;
+  message_id: string | null;
+  template_label: string | null;
+  body: string | null;
+  status: WhatsAppMessageStatus;
+  error_message: string | null;
+  sent_at: string;
+  delivered_at: string | null;
+  read_at: string | null;
+  failed_at: string | null;
+  created_at: string;
 }

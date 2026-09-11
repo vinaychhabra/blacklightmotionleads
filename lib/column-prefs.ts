@@ -26,6 +26,7 @@ export function useColumnPrefs() {
     } catch {
       // ignore malformed storage, fall back to defaults
     }
+
   }, []);
 
   function updatePrefs(next: Partial<ColumnPrefs>) {
@@ -37,4 +38,28 @@ export function useColumnPrefs() {
   }
 
   return { prefs, updatePrefs };
+}
+
+export function useTableColumns<T extends string>(tableId: string, defaults: Record<T, boolean>) {
+  const storageKey = `blacklight-crm-columns-${tableId}`;
+  const [columns, setColumns] = useState<Record<T, boolean>>(defaults);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) setColumns({ ...defaults, ...JSON.parse(stored) });
+    } catch {
+      // Keep the default visibility when saved preferences are unavailable.
+    }
+  }, [storageKey]);
+
+  function setColumn(column: T, visible: boolean) {
+    setColumns((previous) => {
+      const next = { ...previous, [column]: visible };
+      localStorage.setItem(storageKey, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  return { columns, setColumn };
 }

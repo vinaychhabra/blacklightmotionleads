@@ -31,6 +31,12 @@ export default function SettingsPage() {
   const [mailgunApiKey, setMailgunApiKey] = useState("");
   const [mailgunDomain, setMailgunDomain] = useState("");
   const [brevoApiKey, setBrevoApiKey] = useState("");
+  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
+  const [whatsappAccessToken, setWhatsappAccessToken] = useState("");
+  const [whatsappPhoneNumberId, setWhatsappPhoneNumberId] = useState("");
+  const [whatsappBusinessAccountId, setWhatsappBusinessAccountId] = useState("");
+  const [whatsappVerifyToken, setWhatsappVerifyToken] = useState("");
+  const [whatsappApiVersion, setWhatsappApiVersion] = useState("v21.0");
   const [googleMapsEnabled, setGoogleMapsEnabled] = useState(false);
   const [websiteEnrichmentEnabled, setWebsiteEnrichmentEnabled] = useState(false);
   const [emailEnrichmentEnabled, setEmailEnrichmentEnabled] = useState(false);
@@ -65,6 +71,12 @@ export default function SettingsPage() {
         setMailgunApiKey(s.mailgun_api_key || "");
         setMailgunDomain(s.mailgun_domain || "");
         setBrevoApiKey(s.brevo_api_key || "");
+        setWhatsappEnabled(Boolean(s.whatsapp_enabled));
+        setWhatsappAccessToken(s.whatsapp_access_token || "");
+        setWhatsappPhoneNumberId(s.whatsapp_phone_number_id || "");
+        setWhatsappBusinessAccountId(s.whatsapp_business_account_id || "");
+        setWhatsappVerifyToken(s.whatsapp_verify_token || "");
+        setWhatsappApiVersion(s.whatsapp_api_version || "v21.0");
         setGoogleMapsEnabled(Boolean(s.google_maps_api_enabled));
         setWebsiteEnrichmentEnabled(Boolean(s.website_enrichment_enabled));
         setEmailEnrichmentEnabled(Boolean(s.email_enrichment_enabled));
@@ -135,6 +147,12 @@ export default function SettingsPage() {
         mailgun_api_key: mailgunApiKey,
         mailgun_domain: mailgunDomain,
         brevo_api_key: brevoApiKey,
+        whatsapp_enabled: whatsappEnabled,
+        whatsapp_access_token: whatsappAccessToken,
+        whatsapp_phone_number_id: whatsappPhoneNumberId,
+        whatsapp_business_account_id: whatsappBusinessAccountId,
+        whatsapp_verify_token: whatsappVerifyToken,
+        whatsapp_api_version: whatsappApiVersion,
         google_maps_api_enabled: googleMapsEnabled,
         website_enrichment_enabled: websiteEnrichmentEnabled,
         email_enrichment_enabled: emailEnrichmentEnabled,
@@ -462,6 +480,27 @@ export default function SettingsPage() {
             </label>
           )}
 
+          <div className="space-y-3 rounded-xl border border-border bg-row/40 p-4">
+            <label className="flex items-center justify-between text-sm font-semibold text-ink">
+              <span className="inline-flex items-center gap-1.5">
+                Meta WhatsApp Cloud API
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border text-[9px] text-ink-dim" title="Sends messages through Meta's official WhatsApp Cloud API and receives delivery, read, and inbound reply webhooks.">?</span>
+              </span>
+              <input type="checkbox" checked={whatsappEnabled} onChange={(e) => setWhatsappEnabled(e.target.checked)} className="accent-amber" />
+            </label>
+            <p className="text-xs text-ink-dim">Use this for official direct sending. Meta approval is required, and approved message templates are required outside the 24-hour customer-service window.</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <SettingInput label="Phone Number ID" tooltip="The ID of the WhatsApp Business phone number that sends messages. Find it in Meta WhatsApp Manager." value={whatsappPhoneNumberId} onChange={setWhatsappPhoneNumberId} placeholder="Example: 123456789012345" />
+              <SettingInput label="Business Account ID" tooltip="Your WhatsApp Business Account ID used by Meta for the business asset." value={whatsappBusinessAccountId} onChange={setWhatsappBusinessAccountId} placeholder="Example: 987654321098765" />
+              <SettingInput label="Graph API version" tooltip="Meta Graph API version used by the send endpoint. Keep the current supported version unless Meta instructs otherwise." value={whatsappApiVersion} onChange={setWhatsappApiVersion} placeholder="Example: v21.0" />
+              <SettingInput label="Webhook verify token" tooltip="A private string you choose. It must match the token entered when configuring the Meta webhook." value={whatsappVerifyToken} onChange={setWhatsappVerifyToken} placeholder="Create a strong random value" />
+            </div>
+            <SettingInput label="Permanent access token" tooltip="A Meta system-user token with WhatsApp messaging permissions. Keep it secret and never share it in the browser." value={whatsappAccessToken} onChange={setWhatsappAccessToken} placeholder="Paste your Meta access token" password />
+            <div className="rounded-lg border border-cyan/20 bg-cyan/5 p-3 text-[11px] text-ink-dim">
+              <strong className="text-ink">Webhook URL:</strong> <code>/api/whatsapp/webhook</code>. Add this public HTTPS URL in Meta, use the verify token above, and subscribe to <code>messages</code> for delivered/read statuses and replies.
+            </div>
+          </div>
+
           <div className="grid gap-3 md:grid-cols-2">
             {[
               { key: "googleMapsEnabled", label: "Google Maps enabled", value: googleMapsEnabled, setter: setGoogleMapsEnabled, tooltip: "Enables location-based enrichment and map lookups for businesses." },
@@ -533,5 +572,17 @@ export default function SettingsPage() {
         </p>
       </section>
     </div>
+  );
+}
+
+function SettingInput({ label, tooltip, value, onChange, placeholder, password = false }: { label: string; tooltip: string; value: string; onChange: (value: string) => void; placeholder: string; password?: boolean }) {
+  return (
+    <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border text-[9px] normal-case" title={tooltip}>?</span>
+      </span>
+      <input type={password ? "password" : "text"} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm normal-case text-ink outline-none focus:border-amber" />
+    </label>
   );
 }

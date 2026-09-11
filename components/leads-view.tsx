@@ -12,6 +12,7 @@ import {
   MessageCircle,
   Mail,
   Send,
+  Loader2,
 } from "lucide-react";
 import type { Lead, ActivityLogEntry, Template, LeadStatus } from "@/lib/supabase/types";
 import { STATUSES } from "@/lib/supabase/types";
@@ -25,8 +26,9 @@ import {
   updateLead,
   logActivity,
   insertEmailTracking,
+  insertWhatsAppMessage,
 } from "@/lib/supabase/queries";
-import { appendWhatsAppExtras, emailHtml, fillTemplate, mailtoLink, waLink } from "@/lib/messaging";
+import { appendWhatsAppExtras, emailHtml, fillTemplate, mailtoLink } from "@/lib/messaging";
 import { StatusBadge } from "@/components/status-badge";
 import { PriorityDot } from "@/components/priority-dot";
 import { FollowUpBadge } from "@/components/followup-badge";
@@ -34,13 +36,14 @@ import { LeadDrawer } from "@/components/lead-drawer";
 import { useToast } from "@/components/toast-provider";
 import { useConfirm } from "@/components/confirm-provider";
 import { useColumnPrefs } from "@/lib/column-prefs";
+import { ColumnChooser } from "@/components/column-chooser";
 
 const PAGE_SIZE = 20;
 
 export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
   const { showToast } = useToast();
   const confirm = useConfirm();
-  const { prefs } = useColumnPrefs();
+  const { prefs, updatePrefs } = useColumnPrefs();
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [activity, setActivity] = useState<ActivityLogEntry[]>([]);
@@ -58,6 +61,8 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
   const [whatsappTemplateId, setWhatsappTemplateId] = useState<string | null>(null);
   const [emailTemplateId, setEmailTemplateId] = useState<string | null>(null);
   const [isBulkSending, setIsBulkSending] = useState(false);
+  const [sendingEmailLeadIds, setSendingEmailLeadIds] = useState<Set<string>>(new Set());
+  const [sendingWhatsAppLeadIds, setSendingWhatsAppLeadIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadAll();
@@ -205,24 +210,40 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
 
   async function quickSendWhatsApp(lead: Lead, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!lead.phone || !whatsappTemplate) return;
+    if (!lead.phone || !whatsappTemplate || sendingWhatsAppLeadIds.has(lead.id)) return;
+    setSendingWhatsAppLeadIds((prev) => new Set(prev).add(lead.id));
     const msg = appendWhatsAppExtras(fillTemplate(whatsappTemplate.body, lead.name), whatsappTemplate.image_url, whatsappTemplate.cta_label, whatsappTemplate.cta_url);
-    window.open(waLink(lead.phone, msg), "_blank");
     try {
-      const entry = await logActivity(lead.id, "whatsapp_sent", whatsappTemplate.label);
+      const response = await fetch("/api/whatsapp/send", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: lead.phone, text: msg, leadId: lead.id, templateLabel: whatsappTemplate.label }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(result?.message || "WhatsApp send failed");
+      const entry = await logActivity(lead.id, "whatsapp_sent", `${whatsappTemplate.label} (${result.messageId || "queued"})`);
       setActivity((prev) => [entry, ...prev]);
       if (lead.status === "New") {
         const updated = await updateLead(lead.id, { status: "Contacted" });
         setLeads((prev) => prev.map((l) => (l.id === lead.id ? updated : l)));
       }
     } catch (err: any) {
-      showToast(err.message || "Couldn't log the send", "error");
+      const entry = await logActivity(lead.id, "whatsapp_failed", `${whatsappTemplate.label}: ${err.message || "WhatsApp send failed"}`).catch(() => null);
+      if (entry) setActivity((prev) => [entry, ...prev]);
+      await insertWhatsAppMessage({ lead_id: lead.id, recipient_phone: lead.phone, template_label: whatsappTemplate.label, body: msg, status: "failed", error_message: err.message || "WhatsApp send failed", failed_at: new Date().toISOString() }).catch(() => undefined);
+      showToast(err.message || "WhatsApp send failed", "error");
+    } finally {
+      setSendingWhatsAppLeadIds((prev) => {
+        const next = new Set(prev);
+        next.delete(lead.id);
+        return next;
+      });
     }
   }
 
   async function quickSendEmail(lead: Lead, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!lead.email || !emailTemplate) return;
+    if (!lead.email || !emailTemplate || sendingEmailLeadIds.has(lead.id)) return;
+    setSendingEmailLeadIds((prev) => new Set(prev).add(lead.id));
     const msg = fillTemplate(emailTemplate.body, lead.name);
     const html = emailHtml(msg, emailTemplate.image_url, emailTemplate.cta_label, emailTemplate.cta_url);
     const subj = fillTemplate(emailTemplate.subject || "Hi from Blacklight Motion", lead.name);
@@ -268,6 +289,12 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
     } catch (err: any) {
       showToast(err.message || "Couldn't send email", "error");
       if (shouldUseMailApp) window.open(mailtoLink(lead.email, subj, msg), "_self");
+    } finally {
+      setSendingEmailLeadIds((prev) => {
+        const next = new Set(prev);
+        next.delete(lead.id);
+        return next;
+      });
     }
   }
 
@@ -567,6 +594,11 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
           >
             <Download size={13} /> Export
           </button>
+          <ColumnChooser
+            columns={prefs}
+            labels={{ showEmail: "Email", showFollowUp: "Follow-up", showSendCounts: "Send counts" }}
+            onChange={(column, visible) => updatePrefs({ [column]: visible })}
+          />
         </div>
       </div>
 
@@ -580,6 +612,37 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
             className="flex items-center gap-1.5 rounded-lg bg-cyan px-3 py-1.5 text-xs font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Send size={13} /> {isBulkSending ? "Sending..." : "Send email"}
+          </button>
+          <button
+            onClick={async () => {
+              const selected = leads.filter((lead) => selectedIds.has(lead.id) && lead.phone);
+              if (!whatsappTemplate || !selected.length) return;
+              setIsBulkSending(true);
+              let sent = 0;
+              for (const lead of selected) {
+                const recipientPhone = lead.phone;
+                if (!recipientPhone) continue;
+                const msg = appendWhatsAppExtras(fillTemplate(whatsappTemplate.body, lead.name), whatsappTemplate.image_url, whatsappTemplate.cta_label, whatsappTemplate.cta_url);
+                try {
+                  const response = await fetch("/api/whatsapp/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: recipientPhone, text: msg, leadId: lead.id, templateLabel: whatsappTemplate.label }) });
+                  const result = await response.json().catch(() => null);
+                  if (!response.ok) throw new Error(result?.message || "WhatsApp send failed");
+                  const entry = await logActivity(lead.id, "whatsapp_sent", `${whatsappTemplate.label} (${result.messageId || "queued"})`);
+                  setActivity((prev) => [entry, ...prev]);
+                  sent++;
+                } catch (error) {
+                  const entry = await logActivity(lead.id, "whatsapp_failed", `${whatsappTemplate.label}: ${error instanceof Error ? error.message : "WhatsApp send failed"}`).catch(() => null);
+                  if (entry) setActivity((prev) => [entry, ...prev]);
+                  await insertWhatsAppMessage({ lead_id: lead.id, recipient_phone: recipientPhone, template_label: whatsappTemplate.label, body: msg, status: "failed", error_message: error instanceof Error ? error.message : "WhatsApp send failed", failed_at: new Date().toISOString() }).catch(() => undefined);
+                }
+              }
+              setIsBulkSending(false);
+              showToast(`WhatsApp bulk send complete: ${sent} sent, ${selected.length - sent} failed`, sent === selected.length ? "success" : "default");
+            }}
+            disabled={!whatsappTemplate || isBulkSending}
+            className="flex items-center gap-1.5 rounded-lg bg-success px-3 py-1.5 text-xs font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <MessageCircle size={13} /> WhatsApp
           </button>
           <button
             onClick={handleBulkDelete}
@@ -658,19 +721,23 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
                     <div className="flex items-center justify-center gap-1.5">
                       <button
                         onClick={(e) => quickSendWhatsApp(lead, e)}
-                        disabled={!lead.phone}
+                        disabled={!lead.phone || sendingWhatsAppLeadIds.has(lead.id)}
                         title={lead.phone ? "Send WhatsApp" : "No phone number"}
                         className="flex h-7 w-7 items-center justify-center rounded-md bg-success/15 text-success hover:bg-success/25 disabled:cursor-not-allowed disabled:opacity-30"
                       >
-                        <MessageCircle size={14} />
+                        {sendingWhatsAppLeadIds.has(lead.id) ? <Loader2 size={14} className="animate-spin" /> : <MessageCircle size={14} />}
                       </button>
                       <button
                         onClick={(e) => quickSendEmail(lead, e)}
-                        disabled={!lead.email}
+                        disabled={!lead.email || sendingEmailLeadIds.has(lead.id)}
                         title={lead.email ? "Send Email" : "No email address"}
                         className="flex h-7 w-7 items-center justify-center rounded-md bg-cyan/15 text-cyan hover:bg-cyan/25 disabled:cursor-not-allowed disabled:opacity-30"
                       >
-                        <Mail size={14} />
+                        {sendingEmailLeadIds.has(lead.id) ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Mail size={14} />
+                        )}
                       </button>
                     </div>
                   </td>

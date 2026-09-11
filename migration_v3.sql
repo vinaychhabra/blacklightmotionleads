@@ -46,6 +46,12 @@ create table if not exists app_settings (
   mailgun_api_key text default '',
   mailgun_domain text default '',
   brevo_api_key text default '',
+  whatsapp_enabled boolean default false,
+  whatsapp_access_token text default '',
+  whatsapp_phone_number_id text default '',
+  whatsapp_business_account_id text default '',
+  whatsapp_verify_token text default '',
+  whatsapp_api_version text default 'v21.0',
   updated_at timestamptz not null default now(),
   constraint app_settings_singleton check (id = 1)
 );
@@ -76,6 +82,12 @@ alter table if exists public.app_settings
   add column if not exists mailgun_api_key text default '',
   add column if not exists mailgun_domain text default '',
   add column if not exists brevo_api_key text default '',
+  add column if not exists whatsapp_enabled boolean default false,
+  add column if not exists whatsapp_access_token text default '',
+  add column if not exists whatsapp_phone_number_id text default '',
+  add column if not exists whatsapp_business_account_id text default '',
+  add column if not exists whatsapp_verify_token text default '',
+  add column if not exists whatsapp_api_version text default 'v21.0',
   add column if not exists updated_at timestamptz not null default now();
 
 insert into app_settings (
@@ -168,6 +180,33 @@ create index if not exists activity_log_email_actions_idx
   on public.activity_log (created_at desc)
   where action in ('email_sent', 'email_failed');
 
+create table if not exists public.whatsapp_messages (
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid references public.leads(id) on delete set null,
+  direction text not null default 'outbound' check (direction in ('outbound', 'inbound')),
+  recipient_phone text not null,
+  message_id text unique,
+  template_label text,
+  body text,
+  status text not null default 'queued' check (status in ('queued', 'sent', 'delivered', 'read', 'failed', 'received')),
+  error_message text,
+  sent_at timestamptz,
+  delivered_at timestamptz,
+  read_at timestamptz,
+  failed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+alter table public.whatsapp_messages enable row level security;
+drop policy if exists "authenticated read whatsapp_messages" on public.whatsapp_messages;
+create policy "authenticated read whatsapp_messages" on public.whatsapp_messages for select using (auth.role() = 'authenticated');
+drop policy if exists "authenticated insert whatsapp_messages" on public.whatsapp_messages;
+create policy "authenticated insert whatsapp_messages" on public.whatsapp_messages for insert with check (auth.role() = 'authenticated');
+drop policy if exists "authenticated update whatsapp_messages" on public.whatsapp_messages;
+create policy "authenticated update whatsapp_messages" on public.whatsapp_messages for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+create index if not exists whatsapp_messages_lead_created_idx on public.whatsapp_messages (lead_id, created_at desc);
+create index if not exists whatsapp_messages_message_id_idx on public.whatsapp_messages (message_id);
+
 create extension if not exists pgcrypto;
 
 create table if not exists public.email_tracking (
@@ -179,8 +218,12 @@ create table if not exists public.email_tracking (
   sent_at timestamptz not null default now(),
   opened_at timestamptz,
   last_opened_at timestamptz,
-  open_count integer not null default 0
+  open_count integer not null default 0,
+  last_user_agent text
 );
+
+alter table public.email_tracking
+  add column if not exists last_user_agent text;
 
 alter table public.email_tracking enable row level security;
 drop policy if exists "authenticated read email_tracking" on public.email_tracking;
@@ -205,6 +248,23 @@ $$;
 
 revoke all on function public.track_email_open(uuid) from public;
 grant execute on function public.track_email_open(uuid) to anon, authenticated;
+
+create or replace function public.track_email_open(tracking_token uuid, tracking_user_agent text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.email_tracking
+  set opened_at = coalesce(opened_at, now()),
+      last_opened_at = now(),
+      open_count = open_count + 1,
+      last_user_agent = left(tracking_user_agent, 500)
+  where token = tracking_token;
+$$;
+
+revoke all on function public.track_email_open(uuid, text) from public;
+grant execute on function public.track_email_open(uuid, text) to anon, authenticated;
 
 -- Make all new columns visible to PostgREST immediately.
 notify pgrst, 'reload schema';

@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/components/toast-provider";
 import { fetchActivity, fetchEmailTracking, fetchLeads } from "@/lib/supabase/queries";
 import type { ActivityLogEntry, EmailTracking, Lead } from "@/lib/supabase/types";
+import { ColumnChooser } from "@/components/column-chooser";
+import { useTableColumns } from "@/lib/column-prefs";
 
 export default function EmailLogsPage() {
   const { showToast } = useToast();
@@ -13,6 +15,10 @@ export default function EmailLogsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [tracking, setTracking] = useState<EmailTracking[]>([]);
   const [loading, setLoading] = useState(true);
+  const { columns, setColumn } = useTableColumns("email-logs", {
+    status: true, lead: true, email: true, open: true, firstRead: true, lastRead: true, opens: true, client: true, details: true, date: true,
+  });
+  const columnLabels = { status: "Status", lead: "Lead", email: "Email", open: "Open status", firstRead: "First read", lastRead: "Last read", opens: "Open count", client: "Email client", details: "Details", date: "Date" };
 
   useEffect(() => {
     Promise.all([fetchActivity(), fetchLeads(), fetchEmailTracking()])
@@ -37,10 +43,12 @@ export default function EmailLogsPage() {
     [tracking]
   );
   const openedCount = tracking.filter((item) => item.opened_at).length;
+  const formatDate = (value: string | null | undefined) =>
+    value ? new Date(value).toLocaleString() : "—";
 
   return (
     <div>
-      <PageHeader title="Email logs" />
+      <div className="flex items-start justify-between"><PageHeader title="Email logs" /><ColumnChooser columns={columns} labels={columnLabels} onChange={setColumn} /></div>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3">
         <Summary label="Total attempts" value={logs.length} />
         <Summary label="Sent" value={sentCount} tone="text-success" />
@@ -58,12 +66,7 @@ export default function EmailLogsPage() {
           <table className="w-full min-w-[680px] text-sm">
             <thead>
               <tr className="border-b border-border bg-row/80 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-dim">
-                <th className="px-4 py-3">Status</th>
-                <th className="px-3 py-3">Lead</th>
-                <th className="px-3 py-3">Email</th>
-                <th className="px-3 py-3">Open status</th>
-                <th className="px-3 py-3">Details</th>
-                <th className="px-3 py-3">Date</th>
+                {columns.status && <th className="px-4 py-3">Status</th>}{columns.lead && <th className="px-3 py-3">Lead</th>}{columns.email && <th className="px-3 py-3">Email</th>}{columns.open && <th className="px-3 py-3">Open status</th>}{columns.firstRead && <th className="px-3 py-3">First read</th>}{columns.lastRead && <th className="px-3 py-3">Last read</th>}{columns.opens && <th className="px-3 py-3">Opens</th>}{columns.client && <th className="px-3 py-3">Client</th>}{columns.details && <th className="px-3 py-3">Details</th>}{columns.date && <th className="px-3 py-3">Date</th>}
               </tr>
             </thead>
             <tbody>
@@ -73,19 +76,16 @@ export default function EmailLogsPage() {
                 const open = trackingByActivity.get(entry.id);
                 return (
                   <tr key={entry.id} className="border-b border-border/70 last:border-0">
-                    <td className="px-4 py-3">
+                    {columns.status && <td className="px-4 py-3">
                       <span className={`flex items-center gap-1.5 text-xs font-semibold ${sent ? "text-success" : "text-danger"}`}>
                         {sent ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
                         {sent ? "Sent" : "Failed"}
                       </span>
-                    </td>
-                    <td className="px-3 py-3 font-medium text-ink">{lead?.name || "Deleted lead"}</td>
-                    <td className="px-3 py-3 text-xs text-ink-dim">{lead?.email || "—"}</td>
-                    <td className={`px-3 py-3 text-xs font-semibold ${open?.opened_at ? "text-success" : "text-ink-dim"}`}>
+                    </td>}{columns.lead && <td className="px-3 py-3 font-medium text-ink">{lead?.name || "Deleted lead"}</td>}{columns.email && <td className="px-3 py-3 text-xs text-ink-dim">{lead?.email || "—"}</td>}{columns.open && <td className={`px-3 py-3 text-xs font-semibold ${open?.opened_at ? "text-success" : "text-ink-dim"}`}>
                       {sent ? (open?.opened_at ? `Opened (${open.open_count})` : "Not opened") : "—"}
-                    </td>
-                    <td className="max-w-[260px] truncate px-3 py-3 text-xs text-ink-dim">{entry.detail || "—"}</td>
-                    <td className="whitespace-nowrap px-3 py-3 text-xs text-ink-dim">{new Date(entry.created_at).toLocaleString()}</td>
+                    </td>}{columns.firstRead && <td className="whitespace-nowrap px-3 py-3 text-xs text-ink-dim">{sent ? formatDate(open?.opened_at) : "—"}</td>}{columns.lastRead && <td className="whitespace-nowrap px-3 py-3 text-xs text-ink-dim">{sent ? formatDate(open?.last_opened_at) : "—"}</td>}{columns.opens && <td className="px-3 py-3 text-xs text-ink-dim">{sent ? open?.open_count ?? 0 : "—"}</td>}{columns.client && <td className="max-w-[220px] truncate px-3 py-3 text-[10px] text-ink-dim" title={open?.last_user_agent || undefined}>
+                      {sent ? (open?.last_user_agent || "Not available") : "—"}
+                    </td>}{columns.details && <td className="max-w-[260px] truncate px-3 py-3 text-xs text-ink-dim">{entry.detail || "—"}</td>}{columns.date && <td className="whitespace-nowrap px-3 py-3 text-xs text-ink-dim">{new Date(entry.created_at).toLocaleString()}</td>}
                   </tr>
                 );
               })}
