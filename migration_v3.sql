@@ -161,6 +161,51 @@ drop policy if exists "authenticated update branding storage" on storage.objects
 create policy "authenticated update branding storage" on storage.objects
   for update using (bucket_id = 'branding' and auth.role() = 'authenticated');
 
+-- Email send outcomes are stored in the existing activity_log table using
+-- email_sent and email_failed actions. This index keeps the Email logs tab
+-- fast as the CRM accumulates bulk-send history.
+create index if not exists activity_log_email_actions_idx
+  on public.activity_log (created_at desc)
+  where action in ('email_sent', 'email_failed');
+
+create extension if not exists pgcrypto;
+
+create table if not exists public.email_tracking (
+  id uuid primary key default gen_random_uuid(),
+  token uuid not null unique,
+  lead_id uuid not null references public.leads(id) on delete cascade,
+  activity_id uuid references public.activity_log(id) on delete set null,
+  template_label text,
+  sent_at timestamptz not null default now(),
+  opened_at timestamptz,
+  last_opened_at timestamptz,
+  open_count integer not null default 0
+);
+
+alter table public.email_tracking enable row level security;
+drop policy if exists "authenticated read email_tracking" on public.email_tracking;
+create policy "authenticated read email_tracking" on public.email_tracking
+  for select using (auth.role() = 'authenticated');
+drop policy if exists "authenticated insert email_tracking" on public.email_tracking;
+create policy "authenticated insert email_tracking" on public.email_tracking
+  for insert with check (auth.role() = 'authenticated');
+
+create or replace function public.track_email_open(tracking_token uuid)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.email_tracking
+  set opened_at = coalesce(opened_at, now()),
+      last_opened_at = now(),
+      open_count = open_count + 1
+  where token = tracking_token;
+$$;
+
+revoke all on function public.track_email_open(uuid) from public;
+grant execute on function public.track_email_open(uuid) to anon, authenticated;
+
 -- Make all new columns visible to PostgREST immediately.
 notify pgrst, 'reload schema';
 

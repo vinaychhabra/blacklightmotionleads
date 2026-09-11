@@ -53,6 +53,18 @@ export interface ActivityLogEntry {
   created_at: string;
 }
 
+export interface EmailTracking {
+  id: string;
+  token: string;
+  lead_id: string;
+  activity_id: string | null;
+  template_label: string | null;
+  sent_at: string;
+  opened_at: string | null;
+  last_opened_at: string | null;
+  open_count: number;
+}
+
 export interface Template {
   id: string;
   label: string;

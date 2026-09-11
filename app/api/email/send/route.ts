@@ -59,7 +59,7 @@ async function sendWithSmtp(settings: Record<string, any>, to: string, subject: 
   return { ok: true, provider: "smtp" };
 }
 
-async function sendWithSendgrid(settings: Record<string, any>, to: string, subject: string, text: string) {
+async function sendWithSendgrid(settings: Record<string, any>, to: string, subject: string, text: string, html?: string) {
   const apiKey = String(settings.sendgrid_api_key || "").trim();
   const fromAddress = String(settings.email_from_address || "noreply@blacklightmotion.com").trim();
   const fromName = String(settings.email_from_name || "Blacklight Motion").trim();
@@ -78,7 +78,10 @@ async function sendWithSendgrid(settings: Record<string, any>, to: string, subje
       personalizations: [{ to: [{ email: to }] }],
       from: { email: fromAddress, name: fromName },
       subject,
-      content: [{ type: "text/plain", value: text }],
+      content: [
+        { type: "text/plain", value: text },
+        ...(html ? [{ type: "text/html", value: html }] : []),
+      ],
     }),
   });
 
@@ -90,7 +93,7 @@ async function sendWithSendgrid(settings: Record<string, any>, to: string, subje
   return { ok: true, provider: "sendgrid" };
 }
 
-async function sendWithResend(settings: Record<string, any>, to: string, subject: string, text: string) {
+async function sendWithResend(settings: Record<string, any>, to: string, subject: string, text: string, html?: string) {
   const apiKey = String(settings.resend_api_key || "").trim();
   const fromAddress = String(settings.email_from_address || "noreply@blacklightmotion.com").trim();
   const fromName = String(settings.email_from_name || "Blacklight Motion").trim();
@@ -110,6 +113,7 @@ async function sendWithResend(settings: Record<string, any>, to: string, subject
       to: [to],
       subject,
       text,
+      ...(html ? { html } : {}),
     }),
   });
 
@@ -121,7 +125,7 @@ async function sendWithResend(settings: Record<string, any>, to: string, subject
   return { ok: true, provider: "resend" };
 }
 
-async function sendWithMailgun(settings: Record<string, any>, to: string, subject: string, text: string) {
+async function sendWithMailgun(settings: Record<string, any>, to: string, subject: string, text: string, html?: string) {
   const apiKey = String(settings.mailgun_api_key || "").trim();
   const domain = String(settings.mailgun_domain || "").trim();
   const fromAddress = String(settings.email_from_address || "noreply@blacklightmotion.com").trim();
@@ -138,6 +142,7 @@ async function sendWithMailgun(settings: Record<string, any>, to: string, subjec
     subject,
     text,
   });
+  if (html) params.set("html", html);
 
   const response = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
     method: "POST",
@@ -156,7 +161,7 @@ async function sendWithMailgun(settings: Record<string, any>, to: string, subjec
   return { ok: true, provider: "mailgun" };
 }
 
-async function sendWithBrevo(settings: Record<string, any>, to: string, subject: string, text: string) {
+async function sendWithBrevo(settings: Record<string, any>, to: string, subject: string, text: string, html?: string) {
   const apiKey = String(settings.brevo_api_key || "").trim();
   const fromAddress = String(settings.email_from_address || "noreply@blacklightmotion.com").trim();
   const fromName = String(settings.email_from_name || "Blacklight Motion").trim();
@@ -176,6 +181,7 @@ async function sendWithBrevo(settings: Record<string, any>, to: string, subject:
       to: [{ email: to }],
       subject,
       textContent: text,
+      ...(html ? { htmlContent: html } : {}),
     }),
   });
 
@@ -197,12 +203,14 @@ export async function POST(request: Request) {
       html?: string;
       fromName?: string;
       fromEmail?: string;
+      trackingToken?: string;
+      trackingBaseUrl?: string;
     };
 
     const to = String(body.to || "").trim();
     const subject = String(body.subject || "New message").trim();
     const text = String(body.text || "").trim();
-    const html = String(body.html || "").trim();
+    let html = String(body.html || "").trim();
 
     if (!to) {
       return NextResponse.json({ success: false, code: "INVALID_EMAIL", message: "No recipient email was provided." }, { status: 400 });
@@ -211,6 +219,11 @@ export async function POST(request: Request) {
     const settings = await getEmailSettings();
     const providerName = String(settings.email_provider || "system_mailto").toLowerCase();
     configuredProvider = providerName;
+
+    if (body.trackingToken && body.trackingBaseUrl && html) {
+      const trackingUrl = `${String(body.trackingBaseUrl).replace(/\/$/, "")}/api/email/track?token=${encodeURIComponent(body.trackingToken)}`;
+      html += `<img src="${trackingUrl}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0;" />`;
+    }
 
     if (!providerName || providerName === "none" || providerName === "system_mailto") {
       return NextResponse.json({
@@ -229,16 +242,16 @@ export async function POST(request: Request) {
         result = await sendWithSmtp(settings, to, subject, text, html);
         break;
       case "sendgrid":
-        result = await sendWithSendgrid(settings, to, subject, text);
+        result = await sendWithSendgrid(settings, to, subject, text, html);
         break;
       case "resend":
-        result = await sendWithResend(settings, to, subject, text);
+        result = await sendWithResend(settings, to, subject, text, html);
         break;
       case "mailgun":
-        result = await sendWithMailgun(settings, to, subject, text);
+        result = await sendWithMailgun(settings, to, subject, text, html);
         break;
       case "brevo":
-        result = await sendWithBrevo(settings, to, subject, text);
+        result = await sendWithBrevo(settings, to, subject, text, html);
         break;
       default:
         return NextResponse.json({

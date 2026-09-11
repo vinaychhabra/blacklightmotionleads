@@ -11,6 +11,7 @@ import {
   ChevronRight,
   MessageCircle,
   Mail,
+  Send,
 } from "lucide-react";
 import type { Lead, ActivityLogEntry, Template, LeadStatus } from "@/lib/supabase/types";
 import { STATUSES } from "@/lib/supabase/types";
@@ -23,6 +24,7 @@ import {
   bulkDeleteLeads,
   updateLead,
   logActivity,
+  insertEmailTracking,
 } from "@/lib/supabase/queries";
 import { appendWhatsAppExtras, emailHtml, fillTemplate, mailtoLink, waLink } from "@/lib/messaging";
 import { StatusBadge } from "@/components/status-badge";
@@ -55,6 +57,7 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
   const [whatsappTemplateId, setWhatsappTemplateId] = useState<string | null>(null);
   const [emailTemplateId, setEmailTemplateId] = useState<string | null>(null);
+  const [isBulkSending, setIsBulkSending] = useState(false);
 
   useEffect(() => {
     loadAll();
@@ -223,6 +226,7 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
     const msg = fillTemplate(emailTemplate.body, lead.name);
     const html = emailHtml(msg, emailTemplate.image_url, emailTemplate.cta_label, emailTemplate.cta_url);
     const subj = fillTemplate(emailTemplate.subject || "Hi from Blacklight Motion", lead.name);
+    const trackingToken = crypto.randomUUID();
 
     let shouldUseMailApp = false;
     try {
@@ -234,6 +238,8 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
           subject: subj,
           text: msg,
           html,
+          trackingToken,
+          trackingBaseUrl: window.location.origin,
         }),
       });
       const result = await response.json();
@@ -247,6 +253,9 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
 
       const entry = await logActivity(lead.id, "email_sent", emailTemplate.label);
       setActivity((prev) => [entry, ...prev]);
+      if (!shouldUseMailApp) {
+        await insertEmailTracking({ token: trackingToken, lead_id: lead.id, activity_id: entry.id, template_label: emailTemplate.label });
+      }
       showToast("1 email sent successfully", "success");
       if (lead.status === "New") {
         const updated = await updateLead(lead.id, { status: "Contacted" });
@@ -260,6 +269,75 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
       showToast(err.message || "Couldn't send email", "error");
       if (shouldUseMailApp) window.open(mailtoLink(lead.email, subj, msg), "_self");
     }
+  }
+
+  async function handleBulkSendEmail() {
+    if (!emailTemplate || selectedIds.size === 0 || isBulkSending) return;
+
+    const selectedLeads = leads.filter((lead) => selectedIds.has(lead.id));
+    const ok = await confirm({
+      title: "Send bulk email",
+      message: `Send "${emailTemplate.label}" to ${selectedLeads.length} selected lead(s)? Leads without an email address will be logged as failed.`,
+      confirmLabel: `Send to ${selectedLeads.length}`,
+    });
+    if (!ok) return;
+
+    setIsBulkSending(true);
+    let sent = 0;
+    let failed = 0;
+    const newActivity: ActivityLogEntry[] = [];
+
+    for (const lead of selectedLeads) {
+      let action: "email_sent" | "email_failed" = "email_failed";
+      let detail = emailTemplate.label;
+      const trackingToken = crypto.randomUUID();
+
+      try {
+        if (!lead.email?.trim()) throw new Error("No email address");
+
+        const msg = fillTemplate(emailTemplate.body, lead.name);
+        const html = emailHtml(msg, emailTemplate.image_url, emailTemplate.cta_label, emailTemplate.cta_url);
+        const subj = fillTemplate(emailTemplate.subject || "Hi from Blacklight Motion", lead.name);
+        const response = await fetch("/api/email/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: lead.email,
+            subject: subj,
+            text: msg,
+            html,
+            trackingToken,
+            trackingBaseUrl: window.location.origin,
+          }),
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(result?.message || "Email send failed");
+
+        action = "email_sent";
+        sent++;
+        if (lead.status === "New") {
+          const updated = await updateLead(lead.id, { status: "Contacted" });
+          setLeads((prev) => prev.map((item) => (item.id === lead.id ? updated : item)));
+        }
+      } catch (error) {
+        failed++;
+        detail = `${emailTemplate.label}: ${error instanceof Error ? error.message : "Email send failed"}`;
+      }
+
+      try {
+        const entry = await logActivity(lead.id, action, detail);
+        newActivity.push(entry);
+        if (action === "email_sent") {
+          await insertEmailTracking({ token: trackingToken, lead_id: lead.id, activity_id: entry.id, template_label: emailTemplate.label });
+        }
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Couldn't save email log", "error");
+      }
+    }
+
+    setActivity((prev) => [...newActivity, ...prev]);
+    setIsBulkSending(false);
+    showToast(`Bulk email complete: ${sent} sent, ${failed} failed`, failed ? "default" : "success");
   }
 
   function handleExportCsv() {
@@ -496,6 +574,13 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
       {selectedIds.size > 0 && (
         <div className="mb-3 flex items-center gap-3 rounded-lg border border-border bg-panel px-4 py-2">
           <span className="text-xs text-ink-dim">{selectedIds.size} selected</span>
+          <button
+            onClick={handleBulkSendEmail}
+            disabled={!emailTemplate || isBulkSending}
+            className="flex items-center gap-1.5 rounded-lg bg-cyan px-3 py-1.5 text-xs font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Send size={13} /> {isBulkSending ? "Sending..." : "Send email"}
+          </button>
           <button
             onClick={handleBulkDelete}
             className="ml-auto flex items-center gap-1.5 rounded-lg bg-danger/15 px-3 py-1.5 text-xs font-semibold text-danger hover:bg-danger/25"

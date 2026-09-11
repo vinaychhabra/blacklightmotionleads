@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { X, MessageCircle, Mail, Trash2 } from "lucide-react";
 import type { Lead, ActivityLogEntry, Template, LeadStatus, Priority } from "@/lib/supabase/types";
 import { STATUSES, PRIORITIES } from "@/lib/supabase/types";
-import { updateLead, deleteLead, logActivity, insertLead } from "@/lib/supabase/queries";
+import { updateLead, deleteLead, logActivity, insertLead, insertEmailTracking } from "@/lib/supabase/queries";
 import { appendWhatsAppExtras, emailHtml, fillTemplate, mailtoLink, waLink } from "@/lib/messaging";
 import { StatusBadge } from "@/components/status-badge";
 import { useToast } from "@/components/toast-provider";
@@ -124,13 +124,15 @@ export function LeadDrawer({
     }
   }
 
-  async function addActivity(action: string, detail = "") {
-    if (!currentLead.id || currentLead.id === "__new__") return;
+  async function addActivity(action: string, detail = ""): Promise<ActivityLogEntry | null> {
+    if (!currentLead.id || currentLead.id === "__new__") return null;
     try {
       const entry = await logActivity(currentLead.id, action, detail);
       setActivity((prev) => [entry, ...prev]);
+      return entry;
     } catch {
       // non-fatal — activity logging failure shouldn't block the user's action
+      return null;
     }
   }
 
@@ -166,6 +168,7 @@ export function LeadDrawer({
     const msg = fillTemplate(emailTemplate.body, currentLead.name);
     const html = emailHtml(msg, emailTemplate.image_url, emailTemplate.cta_label, emailTemplate.cta_url);
     const subj = fillTemplate(emailTemplate.subject || "Hi from Blacklight Motion", currentLead.name);
+    const trackingToken = crypto.randomUUID();
 
     let shouldUseMailApp = false;
     try {
@@ -177,6 +180,8 @@ export function LeadDrawer({
           subject: subj,
           text: msg,
           html,
+          trackingToken,
+          trackingBaseUrl: window.location.origin,
         }),
       });
       const result = await response.json();
@@ -188,7 +193,10 @@ export function LeadDrawer({
         throw new Error(result?.message || "Email send failed");
       }
 
-      addActivity("email_sent", emailTemplate.label);
+      const entry = await addActivity("email_sent", emailTemplate.label);
+      if (entry && !shouldUseMailApp) {
+        await insertEmailTracking({ token: trackingToken, lead_id: currentLead.id, activity_id: entry.id, template_label: emailTemplate.label });
+      }
       showToast("1 email sent successfully", "success");
       if (currentLead.status === "New") patch({ status: "Contacted" });
     } catch (err: any) {

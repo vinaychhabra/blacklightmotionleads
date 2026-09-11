@@ -1,5 +1,5 @@
 import { supabase } from "./client";
-import type { Lead, ActivityLogEntry, Template, AppSettings } from "./types";
+import type { Lead, ActivityLogEntry, EmailTracking, Template, AppSettings } from "./types";
 
 export interface ScrapedLeadRecord {
   id?: string;
@@ -125,6 +125,23 @@ export async function logActivity(
     .single();
   if (error) throw error;
   return data as ActivityLogEntry;
+}
+
+export async function insertEmailTracking(fields: {
+  token: string;
+  lead_id: string;
+  activity_id?: string | null;
+  template_label?: string | null;
+}): Promise<EmailTracking> {
+  const { data, error } = await supabase.from("email_tracking").insert(fields).select().single();
+  if (error) throw error;
+  return data as EmailTracking;
+}
+
+export async function fetchEmailTracking(): Promise<EmailTracking[]> {
+  const { data, error } = await supabase.from("email_tracking").select("*").order("sent_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as EmailTracking[];
 }
 
 export async function insertTemplate(fields: Partial<Template>): Promise<Template> {

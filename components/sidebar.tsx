@@ -13,6 +13,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Sparkles,
+  ClipboardList,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { supabase } from "@/lib/supabase/client";
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/lead-generator", label: "AI Lead Generator", icon: Sparkles },
   { href: "/followups", label: "Follow-ups", icon: Clock },
   { href: "/templates", label: "Templates", icon: MessageSquareText },
+  { href: "/email-logs", label: "Email logs", icon: ClipboardList },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
