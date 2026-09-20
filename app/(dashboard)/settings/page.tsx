@@ -44,6 +44,7 @@ export default function SettingsPage() {
   const [uploading, setUploading] = useState(false);
   const [email, setEmail] = useState<string | undefined>();
   const [needsMigration, setNeedsMigration] = useState(false);
+  const [verifyingIntegration, setVerifyingIntegration] = useState<"google_places" | "ai" | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { prefs, updatePrefs } = useColumnPrefs();
@@ -126,6 +127,7 @@ export default function SettingsPage() {
         if (!verification.ok || !result.ok) {
           throw new Error(`SMTP verification failed: ${result.message || "Check your host, port, username, and password."}`);
         }
+
       }
 
       const updated = await updateSettings({
@@ -162,6 +164,24 @@ export default function SettingsPage() {
       showToast("Integration settings saved", "success");
     } catch (err: any) {
       showToast(err.message || "Could not save integration settings", "error");
+    }
+  }
+
+  async function verifyIntegration(type: "google_places" | "ai") {
+    setVerifyingIntegration(type);
+    try {
+      const response = await fetch("/api/integrations/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, provider: aiProvider, apiKey: type === "google_places" ? googlePlacesApiKey : aiApiKey }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || "Verification failed");
+      showToast(result.message, "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Verification failed", "error");
+    } finally {
+      setVerifyingIntegration(null);
     }
   }
 
@@ -264,11 +284,12 @@ export default function SettingsPage() {
               className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
             >
               <option value="demo">Demo provider</option>
+              <option value="openstreetmap">OpenStreetMap (Free)</option>
               <option value="google_places">Google Places</option>
             </select>
           </label>
 
-          <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
+          {leadProvider === "google_places" && <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
             <span className="inline-flex items-center gap-1">
               Google Places API key
               <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border text-[9px] text-ink-dim" title="Required only if you want the system to discover real businesses from Google Maps and Places. This lets the app pull live local business records.">?</span>
@@ -280,7 +301,15 @@ export default function SettingsPage() {
               placeholder="Enter your Google Places key"
               className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
             />
-          </label>
+            <button type="button" onClick={() => verifyIntegration("google_places")} disabled={verifyingIntegration !== null} className="mt-2 rounded-lg border border-cyan/40 px-3 py-1.5 text-xs font-semibold text-cyan disabled:opacity-50">
+              {verifyingIntegration === "google_places" ? "Checking Google Places..." : "Verify Google Places key"}
+            </button>
+          </label>}
+          {leadProvider === "openstreetmap" && (
+            <p className="rounded-lg border border-cyan/20 bg-cyan/5 p-3 text-xs leading-5 text-ink-dim">
+              OpenStreetMap is free and does not require an API key. Results depend on local map coverage and may not include ratings or email addresses.
+            </p>
+          )}
 
           <label className="block text-[10px] font-medium uppercase tracking-wide text-ink-dim">
             <span className="inline-flex items-center gap-1">
@@ -313,6 +342,9 @@ export default function SettingsPage() {
               placeholder="Enter your AI provider key"
               className="mt-1 w-full rounded-lg border border-border bg-row px-3 py-2 text-sm text-ink outline-none focus:border-amber"
             />
+            <button type="button" onClick={() => verifyIntegration("ai")} disabled={aiProvider === "none" || verifyingIntegration !== null} className="mt-2 rounded-lg border border-cyan/40 px-3 py-1.5 text-xs font-semibold text-cyan disabled:opacity-50">
+              {verifyingIntegration === "ai" ? "Checking AI provider..." : "Verify AI key"}
+            </button>
           </label>
         </div>
       </section>

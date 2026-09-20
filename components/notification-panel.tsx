@@ -165,7 +165,7 @@ export function NotificationPanel() {
   const totalNotifications = items.length;
 
   return (
-    <div className="fixed right-5 top-5 z-[1001]">
+    <div className="fixed right-4 top-[68px] z-[1001] md:right-5 md:top-5">
       {!isOpen ? (
         <button
           type="button"
@@ -175,7 +175,7 @@ export function NotificationPanel() {
         >
           <Bell size={18} className="text-ink" />
           {totalNotifications > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-amber to-cyan px-1 text-[9px] font-bold text-black">
+            <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-[9px] font-bold text-white">
               {Math.min(totalNotifications, 9)}
             </span>
           )}

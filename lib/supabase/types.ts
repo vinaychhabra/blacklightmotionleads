@@ -95,7 +95,7 @@ export interface AppSettings {
   id: number;
   company_name: string;
   logo_url: string | null;
-  lead_provider?: "demo" | "google_places" | string | null;
+  lead_provider?: "demo" | "google_places" | "openstreetmap" | string | null;
   google_places_api_key?: string | null;
   ai_provider?: "none" | "openai" | "anthropic" | "google_gemini" | "azure_openai" | "groq" | string | null;
   ai_api_key?: string | null;

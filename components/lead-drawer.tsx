@@ -287,7 +287,7 @@ export function LeadDrawer({
                 className="input"
               />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="City">
                 <input value={isDraft ? (lead.city ?? "") : undefined} defaultValue={!isDraft ? (lead.city ?? "") : undefined} onChange={isDraft ? (e) => patch({ city: e.target.value }) : undefined} onBlur={!isDraft ? (e) => patch({ city: e.target.value }) : undefined} className="input" />
               </Field>
@@ -295,7 +295,7 @@ export function LeadDrawer({
                 <input value={isDraft ? (lead.source ?? "") : undefined} defaultValue={!isDraft ? (lead.source ?? "") : undefined} onChange={isDraft ? (e) => patch({ source: e.target.value }) : undefined} onBlur={!isDraft ? (e) => patch({ source: e.target.value }) : undefined} className="input" />
               </Field>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Phone">
                 <input value={isDraft ? (lead.phone ?? "") : undefined} defaultValue={!isDraft ? (lead.phone ?? "") : undefined} onChange={isDraft ? (e) => patch({ phone: e.target.value }) : undefined} onBlur={!isDraft ? (e) => patch({ phone: e.target.value }) : undefined} className="input" />
               </Field>

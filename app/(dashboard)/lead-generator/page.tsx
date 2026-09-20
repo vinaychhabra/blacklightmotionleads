@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/components/toast-provider";
 import { supabase } from "@/lib/supabase/client";
 import type { Lead } from "@/lib/supabase/types";
+import { dedupeBusinesses } from "@/lib/lead-generator/service";
 import type { BusinessLeadRecord, LeadGenerationCampaign } from "@/lib/lead-generator/types";
 
 const defaultForm = {
@@ -19,6 +20,7 @@ const defaultForm = {
   emailRequired: false,
   socialOnly: false,
   leadQuality: "Any",
+  radiusKm: 25,
 };
 
 export default function LeadGeneratorPage() {
@@ -31,38 +33,21 @@ export default function LeadGeneratorPage() {
   const [campaign, setCampaign] = useState<LeadGenerationCampaign | null>(null);
   const [activeTab, setActiveTab] = useState<"generate" | "scraped" | "campaigns">("generate");
   const [integrationError, setIntegrationError] = useState<string | null>(null);
+  const [integrationErrorTitle, setIntegrationErrorTitle] = useState("Integration required");
+
+  function reportError(message: string, code?: string) {
+    setIntegrationErrorTitle(code === "INTEGRATION_REQUIRED" || code === "MISSING_API_KEY" ? "Integration required" : "Lead search error");
+    setIntegrationError(message);
+  }
 
   useEffect(() => {
     if (!isLoading) return;
-    const steps = [15, 36, 60, 82, 100];
-    let index = 0;
+    setProgress(8);
     const timer = setInterval(() => {
-      index += 1;
-      setProgress(steps[Math.min(index, steps.length - 1)] ?? 100);
-      if (index >= steps.length) clearInterval(timer);
-    }, 350);
+      setProgress((prev) => (prev >= 92 ? 92 : prev + Math.max(1, Math.round((92 - prev) * 0.08))));
+    }, 500);
     return () => clearInterval(timer);
   }, [isLoading]);
-
-  function dedupeScrapedRows(rows: Array<Record<string, any>>) {
-    const seen = new Set<string>();
-
-    return rows.filter((row) => {
-      const candidate = String(
-        row.external_place_id ||
-          row.website ||
-          row.phone ||
-          row.email ||
-          `${row.company_name || "unknown"}-${row.city || "unknown"}` ||
-          ""
-      ).trim().toLowerCase();
-
-      if (!candidate) return true;
-      if (seen.has(candidate)) return false;
-      seen.add(candidate);
-      return true;
-    });
-  }
 
   async function handleGenerate() {
     setIsLoading(true);
@@ -80,13 +65,15 @@ export default function LeadGeneratorPage() {
       const result = await response.json();
       if (!response.ok || !result.success) {
         const message = result?.message || "Failed to generate leads";
-        setIntegrationError(message);
+        reportError(message, result?.code);
         showToast(message, "error");
-        throw new Error(message);
+        return;
       }
 
       setIntegrationError(null);
-      const nextLeads = Array.isArray(result.leads) ? result.leads : [];
+      if (result.warning) showToast(result.warning, "error");
+      const rawLeads = Array.isArray(result.leads) ? result.leads : [];
+      const nextLeads = dedupeBusinesses(rawLeads);
       setQueries(result.queries || []);
       setLeads(nextLeads);
       setCampaign(result.campaign || null);
@@ -164,13 +151,11 @@ export default function LeadGeneratorPage() {
             tags: lead.tags || [lead.business_category],
           }));
 
-          const uniqueRows = dedupeScrapedRows(rows);
-
-          if (uniqueRows.length === 0) {
+          if (rows.length === 0) {
             return;
           }
 
-          const { error } = await supabase.from("scraped_leads").upsert(uniqueRows, { onConflict: "external_place_id" });
+          const { error } = await supabase.from("scraped_leads").upsert(rows, { onConflict: "external_place_id" });
           if (error) {
             console.error("scraped lead insert failed", {
               code: error.code,
@@ -180,20 +165,20 @@ export default function LeadGeneratorPage() {
             });
             const reason = error?.message || "The insert is being rejected by Supabase.";
             const message = `Scraped leads were generated, but the save failed: ${reason}. Check for duplicate values, confirm the migration is active, and make sure the logged-in user is allowed to insert into scraped_leads.`;
-            setIntegrationError(message);
+            reportError(message);
             showToast(message, "error");
           }
         } catch (insertError: any) {
           console.error("scraped lead insert exception", insertError);
           const message = insertError?.message || "Could not save scraped leads to Supabase.";
-          setIntegrationError(message);
+          reportError(message);
           showToast(message, "error");
         }
       }
     } catch (error: any) {
       console.error(error);
       const message = error?.message || "Could not generate leads";
-      setIntegrationError(message);
+      reportError(message);
       showToast(message, "error");
     } finally {
       setIsLoading(false);
@@ -261,7 +246,7 @@ export default function LeadGeneratorPage() {
 
       {integrationError && (
         <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-100">
-          <div className="font-medium">Integration required</div>
+          <div className="font-medium">{integrationErrorTitle}</div>
           <div className="mt-1 text-xs text-red-100/90">{integrationError}</div>
         </div>
       )}
@@ -336,7 +321,7 @@ export default function LeadGeneratorPage() {
               </label>
               <label className="text-xs text-ink-dim">
                 Radius (km)
-                <input type="number" value={25} readOnly className="mt-1 w-full rounded-lg border border-border bg-row p-2 text-sm text-ink opacity-75" />
+                <input type="number" value={filters.radiusKm} onChange={(e) => setFilters((p) => ({ ...p, radiusKm: Number(e.target.value || 0) }))} className="mt-1 w-full rounded-lg border border-border bg-row p-2 text-sm text-ink" />
               </label>
             </div>
 

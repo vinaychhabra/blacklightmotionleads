@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   ArrowRight,
   BriefcaseBusiness,
   CalendarClock,
   CircleAlert,
   Goal,
+  MessageSquareText,
+  Sparkles,
   TrendingUp,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
@@ -166,120 +169,150 @@ export default function DashboardPage() {
         subtitle="A clean view of pipeline health, priority work, and the actions that need attention today."
       />
 
-      <div className="glass-surface rounded-xl p-3.5">
-        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-ink-dim">Executive overview</p>
-            <h2 className="mt-1 font-display text-xl font-bold text-ink">Sales performance at a glance</h2>
-          </div>
-          <div className="glass-tile inline-flex items-center gap-2 rounded-full px-2.5 py-1.5 text-[10px] font-medium text-ink-dim">
-            <span className="h-2 w-2 rounded-full bg-success" />
-            {stats.dueTodayCount} actions due today
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard value={stats.totalLeads} label="Total Leads" accent />
-          <StatCard value={`${stats.conversionRate}%`} label="Conversion Rate" />
-          <StatCard value={stats.contactedCount} label="Contacted Leads" />
-          <StatCard value={stats.dueTodayCount} label="Due Today" />
-        </div>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
-        <div className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2">
-            <BreakdownSection title="Leads by Status" rows={statusRows} />
-            <BreakdownSection title="Leads by Priority" rows={priorityRows} />
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <BreakdownSection title="Leads by City" rows={cityRows} />
-            <BreakdownSection title="Leads by Source" rows={sourceRows} />
-          </div>
-
-          {lostReasonRows.length > 0 && (
-            <BreakdownSection title="Why deals were lost" rows={lostReasonRows} />
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">Performance snapshot</h2>
+          {stats.dueTodayCount > 0 && (
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-danger/10 px-2.5 py-1 text-[11px] font-medium text-danger">
+              <span className="h-1.5 w-1.5 rounded-full bg-danger" />
+              {stats.dueTodayCount} action{stats.dueTodayCount === 1 ? "" : "s"} due today
+            </div>
           )}
         </div>
 
-        <aside className="space-y-4">
-          <div className="glass-surface rounded-xl p-3.5">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-display text-sm font-bold text-ink">Daily focus</h3>
-              <Goal className="h-4 w-4 text-amber" />
-            </div>
-            <div className="space-y-2.5">
-              {adminPriorityCards.map((card) => (
-                <div key={card.label} className="glass-tile rounded-lg px-3 py-2.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{card.label}</span>
-                    <span className={`h-2.5 w-2.5 rounded-full ${
-                      card.tone === "amber"
-                        ? "bg-amber"
-                        : card.tone === "cyan"
-                          ? "bg-cyan"
-                          : card.tone === "danger"
-                            ? "bg-danger"
-                            : "bg-success"
-                    }`} />
-                  </div>
-                  <div className="mt-1.5 text-lg font-bold text-ink">{card.value}</div>
-                  <div className="mt-0.5 text-[10.5px] text-ink-dim">{card.meta}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="glass-surface rounded-xl p-3.5">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-display text-sm font-bold text-ink">Urgent follow-ups</h3>
-              <CircleAlert className="h-4 w-4 text-danger" />
-            </div>
-            {followUpQueue.length === 0 ? (
-              <p className="text-xs text-ink-dim">No follow-ups overdue right now.</p>
-            ) : (
-              <div className="space-y-2.5">
-                {followUpQueue.map((lead) => (
-                  <div key={lead.id} className="glass-tile rounded-lg px-3 py-2.5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="truncate text-sm font-medium text-ink">{lead.name}</div>
-                      <span className="rounded-full bg-danger/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-danger">
-                        {lead.priority}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-[10.5px] text-ink-dim">
-                      {lead.follow_up_date ? new Date(`${lead.follow_up_date}T00:00:00`).toLocaleDateString() : "Needs follow-up"} · {lead.status}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="glass-surface rounded-xl p-3.5">
-            <h3 className="mb-3 font-display text-sm font-bold text-ink">Recent activity</h3>
-            {recentActivity.length === 0 ? (
-              <p className="text-xs text-ink-dim">No activity logged yet.</p>
-            ) : (
-              <div className="space-y-2.5">
-                {recentActivity.slice(0, 5).map((a) => (
-                  <div key={a.id} className="glass-tile rounded-lg px-3 py-2.5">
-                    <div className="font-mono text-[9.5px] uppercase tracking-wide text-ink-dim">
-                      {new Date(a.created_at).toLocaleString()}
-                    </div>
-                    <div className="mt-1 text-sm text-ink">{a.leadName}</div>
-                    <div className="text-[10.5px] text-ink-dim">
-                      {a.action}
-                      {a.detail ? ` · ${a.detail}` : ""}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </aside>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard value={stats.totalLeads} label="Total Leads" icon={BriefcaseBusiness} accent />
+          <StatCard value={`${stats.conversionRate}%`} label="Conversion Rate" icon={TrendingUp} />
+          <StatCard value={stats.contactedCount} label="Contacted Leads" icon={MessageSquareText} />
+          <StatCard value={stats.dueTodayCount} label="Due Today" icon={CalendarClock} />
+        </div>
       </div>
+
+      {stats.totalLeads === 0 ? (
+        <div className="panel-surface flex flex-col items-center rounded-xl px-6 py-14 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber/15">
+            <Sparkles className="h-5 w-5 text-amber" />
+          </div>
+          <h3 className="mt-4 font-display text-lg font-bold text-ink">No leads yet</h3>
+          <p className="mx-auto mt-1.5 max-w-sm text-sm text-ink-dim">
+            Generate a fresh batch of leads with AI, or add one manually to start tracking your pipeline.
+          </p>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href="/lead-generator"
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-amber to-cyan px-4 py-2 text-xs font-semibold text-black"
+            >
+              Generate leads with AI
+              <ArrowRight size={14} />
+            </Link>
+            <Link
+              href="/leads"
+              className="flex items-center gap-1.5 rounded-lg border border-border px-3.5 py-2 text-xs font-medium text-ink-dim hover:text-ink"
+            >
+              Add a lead manually
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <BreakdownSection title="Leads by Status" rows={statusRows} />
+              <BreakdownSection title="Leads by Priority" rows={priorityRows} />
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <BreakdownSection title="Leads by City" rows={cityRows} />
+              <BreakdownSection title="Leads by Source" rows={sourceRows} />
+            </div>
+
+            {lostReasonRows.length > 0 && (
+              <BreakdownSection title="Why deals were lost" rows={lostReasonRows} />
+            )}
+          </div>
+
+          <aside className="space-y-4">
+            <div className="panel-surface rounded-xl p-4">
+              <div className="mb-3.5 flex items-center justify-between">
+                <h3 className="font-display text-sm font-semibold text-ink">Priority queue</h3>
+                <Goal className="h-4 w-4 text-ink-dim" />
+              </div>
+              <div className="space-y-2">
+                {adminPriorityCards.map((card) => (
+                  <div key={card.label} className="flex items-center justify-between gap-3 rounded-lg bg-row px-3 py-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${
+                        card.tone === "amber"
+                          ? "bg-amber"
+                          : card.tone === "cyan"
+                            ? "bg-cyan"
+                            : card.tone === "danger"
+                              ? "bg-danger"
+                              : "bg-success"
+                      }`} />
+                      <div>
+                        <div className="text-[12.5px] font-medium text-ink">{card.label}</div>
+                        <div className="text-[10.5px] text-ink-dim">{card.meta}</div>
+                      </div>
+                    </div>
+                    <div className="text-lg font-bold text-ink">{card.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="panel-surface rounded-xl p-4">
+              <div className="mb-3.5 flex items-center justify-between">
+                <h3 className="font-display text-sm font-semibold text-ink">Urgent follow-ups</h3>
+                <CircleAlert className="h-4 w-4 text-danger" />
+              </div>
+              {followUpQueue.length === 0 ? (
+                <p className="text-xs text-ink-dim">No follow-ups overdue right now.</p>
+              ) : (
+                <div className="space-y-2">
+                  {followUpQueue.map((lead) => (
+                    <div key={lead.id} className="rounded-lg bg-row px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="truncate text-[13px] font-medium text-ink">{lead.name}</div>
+                        <span className="rounded-full bg-danger/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-danger">
+                          {lead.priority}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-[11px] text-ink-dim">
+                        {lead.follow_up_date ? new Date(`${lead.follow_up_date}T00:00:00`).toLocaleDateString() : "Needs follow-up"} · {lead.status}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="panel-surface rounded-xl p-4">
+              <h3 className="mb-3.5 font-display text-sm font-semibold text-ink">Recent activity</h3>
+              {recentActivity.length === 0 ? (
+                <p className="text-xs text-ink-dim">No activity logged yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {recentActivity.slice(0, 5).map((a) => (
+                    <div key={a.id} className="rounded-lg bg-row px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="truncate text-[13px] text-ink">{a.leadName}</div>
+                        <div className="shrink-0 text-[10px] text-ink-dim">
+                          {new Date(a.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-ink-dim">
+                        {a.action}
+                        {a.detail ? ` · ${a.detail}` : ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

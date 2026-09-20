@@ -44,10 +44,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <ToastProvider>
       <ConfirmProvider>
-        <div className="flex h-screen overflow-hidden bg-bg">
+        <div className="flex h-screen flex-col overflow-hidden bg-bg md:flex-row">
           <Sidebar userEmail={session?.user?.email} />
           <main className="flex-1 overflow-y-auto scrollbar-thin">
-            <div className="mx-auto max-w-[1500px] px-5 py-7 md:px-8 lg:px-10">
+            <div className="mx-auto max-w-[1500px] px-4 py-6 sm:px-5 sm:py-7 md:px-8 lg:px-10">
               <div className="space-y-6">{children}</div>
             </div>
             <NotificationPanel />
