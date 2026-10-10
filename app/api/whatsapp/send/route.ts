@@ -20,7 +20,10 @@ export async function POST(request: Request) {
     if (!to) return NextResponse.json({ message: "A recipient phone number is required." }, { status: 400 });
     const config = await settings();
     if (!config.whatsapp_enabled || !config.whatsapp_access_token || !config.whatsapp_phone_number_id) {
-      return NextResponse.json({ message: "Configure and enable WhatsApp Cloud API in Settings." }, { status: 400 });
+      return NextResponse.json({
+        code: "WHATSAPP_API_NOT_CONFIGURED",
+        message: "Configure and enable WhatsApp Cloud API in Settings.",
+      }, { status: 400 });
     }
     const apiVersion = config.whatsapp_api_version || "v21.0";
     const payload = body.templateName

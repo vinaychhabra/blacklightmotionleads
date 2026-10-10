@@ -28,7 +28,7 @@ import {
   insertEmailTracking,
   insertWhatsAppMessage,
 } from "@/lib/supabase/queries";
-import { appendWhatsAppExtras, emailHtml, fillTemplate, mailtoLink } from "@/lib/messaging";
+import { appendWhatsAppExtras, emailHtml, fillTemplate, mailtoLink, waLink } from "@/lib/messaging";
 import { StatusBadge } from "@/components/status-badge";
 import { PriorityDot } from "@/components/priority-dot";
 import { FollowUpBadge } from "@/components/followup-badge";
@@ -219,6 +219,10 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
         body: JSON.stringify({ to: lead.phone, text: msg, leadId: lead.id, templateLabel: whatsappTemplate.label }),
       });
       const result = await response.json().catch(() => null);
+      if (result?.code === "WHATSAPP_API_NOT_CONFIGURED") {
+        window.location.assign(waLink(lead.phone, msg));
+        return;
+      }
       if (!response.ok) throw new Error(result?.message || "WhatsApp send failed");
       const entry = await logActivity(lead.id, "whatsapp_sent", `${whatsappTemplate.label} (${result.messageId || "queued"})`);
       setActivity((prev) => [entry, ...prev]);
@@ -626,6 +630,11 @@ export function LeadsView({ dueOnly = false }: { dueOnly?: boolean }) {
                 try {
                   const response = await fetch("/api/whatsapp/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: recipientPhone, text: msg, leadId: lead.id, templateLabel: whatsappTemplate.label }) });
                   const result = await response.json().catch(() => null);
+                  if (result?.code === "WHATSAPP_API_NOT_CONFIGURED") {
+                    setIsBulkSending(false);
+                    showToast("WhatsApp API is not configured. Use the WhatsApp button on each lead to open Web WhatsApp.", "default");
+                    return;
+                  }
                   if (!response.ok) throw new Error(result?.message || "WhatsApp send failed");
                   const entry = await logActivity(lead.id, "whatsapp_sent", `${whatsappTemplate.label} (${result.messageId || "queued"})`);
                   setActivity((prev) => [entry, ...prev]);

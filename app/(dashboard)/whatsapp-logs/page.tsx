@@ -7,6 +7,7 @@ import type { Lead, WhatsAppMessage } from "@/lib/supabase/types";
 import { useToast } from "@/components/toast-provider";
 import { ColumnChooser } from "@/components/column-chooser";
 import { useTableColumns } from "@/lib/column-prefs";
+import { waLink } from "@/lib/messaging";
 
 export default function WhatsAppLogsPage() {
   const { showToast } = useToast();
@@ -28,8 +29,12 @@ export default function WhatsAppLogsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ to: message.recipient_phone, text: message.body, leadId: message.lead_id, templateLabel: message.template_label }),
     });
+    const result = await response.json().catch(() => null);
+    if (result?.code === "WHATSAPP_API_NOT_CONFIGURED") {
+      window.location.assign(waLink(message.recipient_phone, message.body || ""));
+      return;
+    }
     if (!response.ok) {
-      const result = await response.json().catch(() => null);
       showToast(result?.message || "Retry failed", "error");
       return;
     }

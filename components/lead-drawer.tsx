@@ -5,7 +5,7 @@ import { X, MessageCircle, Mail, Trash2, Loader2 } from "lucide-react";
 import type { Lead, ActivityLogEntry, Template, LeadStatus, Priority } from "@/lib/supabase/types";
 import { STATUSES, PRIORITIES } from "@/lib/supabase/types";
 import { updateLead, deleteLead, logActivity, insertLead, insertEmailTracking, insertWhatsAppMessage } from "@/lib/supabase/queries";
-import { appendWhatsAppExtras, emailHtml, fillTemplate, mailtoLink } from "@/lib/messaging";
+import { appendWhatsAppExtras, emailHtml, fillTemplate, mailtoLink, waLink } from "@/lib/messaging";
 import { StatusBadge } from "@/components/status-badge";
 import { useToast } from "@/components/toast-provider";
 import { useConfirm } from "@/components/confirm-provider";
@@ -177,6 +177,10 @@ export function LeadDrawer({
         body: JSON.stringify({ to: currentLead.phone, text: msg, leadId: currentLead.id, templateLabel: whatsappTemplate.label }),
       });
       const result = await response.json().catch(() => null);
+      if (result?.code === "WHATSAPP_API_NOT_CONFIGURED") {
+        window.location.assign(waLink(currentLead.phone, msg));
+        return;
+      }
       if (!response.ok) throw new Error(result?.message || "WhatsApp send failed");
       await addActivity("whatsapp_sent", `${whatsappTemplate.label} (${result.messageId || "queued"})`);
       if (currentLead.status === "New") patch({ status: "Contacted" });
